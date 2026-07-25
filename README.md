@@ -1,8 +1,16 @@
 <p align="center">
-  <img src="assets/public/static/img/logo.svg" width="280" alt="CloudRevo">
+  <a href="https://github.com/dadastory/CloudRevo_web">
+    <img src="https://raw.githubusercontent.com/dadastory/CloudRevo_web/main/public/static/img/logo.svg" width="280" alt="CloudRevo">
+  </a>
 </p>
 
 <p align="center">Fast, self-hosted file storage with permissions, sharing, and offline downloads.</p>
+
+<p align="center">
+  <a href="README.md">English</a> ·
+  <a href="README_zh-CN.md">简体中文</a> ·
+  <a href="#interface-languages">Other interface languages</a>
+</p>
 
 <p align="center">
   <a href="LICENSE">GPL-3.0</a> ·
@@ -22,6 +30,10 @@
 - [ ] Desktop sync support
 - [ ] Deployment and API documentation
 - [ ] More integration tests
+
+## Interface languages
+
+The frontend includes interface translations for [العربية](https://github.com/dadastory/CloudRevo_web/tree/main/public/locales/ar-AR), [Deutsch](https://github.com/dadastory/CloudRevo_web/tree/main/public/locales/de-DE), [Español](https://github.com/dadastory/CloudRevo_web/tree/main/public/locales/es-ES), [Français](https://github.com/dadastory/CloudRevo_web/tree/main/public/locales/fr-FR), [Italiano](https://github.com/dadastory/CloudRevo_web/tree/main/public/locales/it-IT), [日本語](https://github.com/dadastory/CloudRevo_web/tree/main/public/locales/ja-JP), [한국어](https://github.com/dadastory/CloudRevo_web/tree/main/public/locales/ko-KR), [Polski](https://github.com/dadastory/CloudRevo_web/tree/main/public/locales/pl-PL), [Português (Brasil)](https://github.com/dadastory/CloudRevo_web/tree/main/public/locales/pt-BR), [Русский](https://github.com/dadastory/CloudRevo_web/tree/main/public/locales/ru-RU), and [繁體中文](https://github.com/dadastory/CloudRevo_web/tree/main/public/locales/zh-TW). English and Simplified Chinese documentation are linked above.
 
 ## Start locally
 

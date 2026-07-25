@@ -1,8 +1,16 @@
 <p align="center">
-  <img src="assets/public/static/img/logo.svg" width="280" alt="CloudRevo">
+  <a href="https://github.com/dadastory/CloudRevo_web">
+    <img src="https://raw.githubusercontent.com/dadastory/CloudRevo_web/main/public/static/img/logo.svg" width="280" alt="CloudRevo">
+  </a>
 </p>
 
 <p align="center">快速、自托管的文件存储，提供权限、分享与离线下载。</p>
+
+<p align="center">
+  <a href="README.md">English</a> ·
+  <a href="README_zh-CN.md">简体中文</a> ·
+  <a href="#interface-languages">其他界面语言</a>
+</p>
 
 <p align="center">
   <a href="LICENSE">GPL-3.0</a> ·
@@ -22,6 +30,10 @@
 - [ ] 桌面端同步
 - [ ] 部署与 API 文档
 - [ ] 更多集成测试
+
+## 界面语言
+
+前端已提供 [العربية](https://github.com/dadastory/CloudRevo_web/tree/main/public/locales/ar-AR)、[Deutsch](https://github.com/dadastory/CloudRevo_web/tree/main/public/locales/de-DE)、[Español](https://github.com/dadastory/CloudRevo_web/tree/main/public/locales/es-ES)、[Français](https://github.com/dadastory/CloudRevo_web/tree/main/public/locales/fr-FR)、[Italiano](https://github.com/dadastory/CloudRevo_web/tree/main/public/locales/it-IT)、[日本語](https://github.com/dadastory/CloudRevo_web/tree/main/public/locales/ja-JP)、[한국어](https://github.com/dadastory/CloudRevo_web/tree/main/public/locales/ko-KR)、[Polski](https://github.com/dadastory/CloudRevo_web/tree/main/public/locales/pl-PL)、[Português (Brasil)](https://github.com/dadastory/CloudRevo_web/tree/main/public/locales/pt-BR)、[Русский](https://github.com/dadastory/CloudRevo_web/tree/main/public/locales/ru-RU) 与 [繁體中文](https://github.com/dadastory/CloudRevo_web/tree/main/public/locales/zh-TW) 界面翻译；英文与简体中文 README 请使用上方导航。
 
 ## 本地启动
 
