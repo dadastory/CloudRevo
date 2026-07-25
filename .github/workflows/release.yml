@@ -147,14 +147,19 @@ jobs:
           VERSION: ${{ env.RELEASE_VERSION }}
         run: |
           set -eu
-          test "$(find . -type f | wc -l)" -eq 2
-          digest_args="$(find . -type f -exec cat {} \; | xargs -r -n1 printf "${IMAGE}@%s ")"
-          test -n "$digest_args"
+          mapfile -t digest_files < <(find . -type f -print)
+          test "${#digest_files[@]}" -eq 2
+          digest_args=()
+          for digest_file in "${digest_files[@]}"; do
+            digest="$(cat "$digest_file")"
+            test -n "$digest"
+            digest_args+=("${IMAGE}@${digest}")
+          done
           if [ "$EVENT_NAME" = "push" ]; then
-            docker buildx imagetools create -t "${IMAGE}:latest" $digest_args
+            docker buildx imagetools create -t "${IMAGE}:latest" "${digest_args[@]}"
             docker buildx imagetools inspect "${IMAGE}:latest"
           else
-            docker buildx imagetools create -t "${IMAGE}:${VERSION}" -t "${IMAGE}:v${VERSION}" $digest_args
+            docker buildx imagetools create -t "${IMAGE}:${VERSION}" -t "${IMAGE}:v${VERSION}" "${digest_args[@]}"
             docker buildx imagetools inspect "${IMAGE}:v${VERSION}"
           fi
         working-directory: ${{ runner.temp }}/digests
