@@ -1,6 +1,10 @@
 <p align="center">
   <a href="https://github.com/dadastory/CloudRevo_web">
-    <img src="https://raw.githubusercontent.com/dadastory/CloudRevo_web/main/public/static/img/logo.svg" width="280" alt="CloudRevo">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/dadastory/CloudRevo_web/main/public/static/img/logo_light.svg">
+      <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/dadastory/CloudRevo_web/main/public/static/img/logo.svg">
+      <img src="https://raw.githubusercontent.com/dadastory/CloudRevo_web/main/public/static/img/logo.svg" width="280" alt="CloudRevo">
+    </picture>
   </a>
 </p>
 
