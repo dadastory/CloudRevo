@@ -11,6 +11,14 @@
 <p align="center">你所需要的一切，只需一个网盘。</p>
 
 <p align="center">
+  <a href="https://github.com/dadastory/CloudRevo/actions/workflows/release.yml"><img src="https://img.shields.io/github/actions/workflow/status/dadastory/CloudRevo/release.yml?branch=main&style=for-the-badge&label=build" alt="构建状态"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/dadastory/CloudRevo?style=for-the-badge" alt="GPL-3.0 许可证"></a>
+  <a href="https://github.com/dadastory/CloudRevo/stargazers"><img src="https://img.shields.io/github/stars/dadastory/CloudRevo?style=for-the-badge" alt="GitHub Star"></a>
+  <a href="https://github.com/dadastory/CloudRevo/forks"><img src="https://img.shields.io/github/forks/dadastory/CloudRevo?style=for-the-badge" alt="GitHub Fork"></a>
+  <a href="https://github.com/dadastory/CloudRevo/issues"><img src="https://img.shields.io/github/issues/dadastory/CloudRevo?style=for-the-badge" alt="未解决 Issue"></a>
+</p>
+
+<p align="center">
   <a href="README.md">English</a> ·
   <a href="README_zh-CN.md">简体中文</a> ·
   <a href="README_zh-TW.md">繁體中文</a> ·
@@ -44,6 +52,12 @@
 - [ ] 桌面端同步
 - [ ] 部署与 API 文档
 - [ ] 更多集成测试
+
+## 社区
+
+- 在 [GitHub Discussions](https://github.com/dadastory/CloudRevo/discussions) 提问、分享部署经验或提出想法。
+- 通过 [Issues](https://github.com/dadastory/CloudRevo/issues) 反馈可复现问题与安全相关问题。
+- 如果 CloudRevo 对你有帮助，欢迎 Star 或分享，让项目更容易被需要的人发现。
 
 ## 本地启动
 

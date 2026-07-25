@@ -11,6 +11,14 @@
 <p align="center">All you need is one cloud.</p>
 
 <p align="center">
+  <a href="https://github.com/dadastory/CloudRevo/actions/workflows/release.yml"><img src="https://img.shields.io/github/actions/workflow/status/dadastory/CloudRevo/release.yml?branch=main&style=for-the-badge&label=build" alt="Build status"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/dadastory/CloudRevo?style=for-the-badge" alt="GPL-3.0 license"></a>
+  <a href="https://github.com/dadastory/CloudRevo/stargazers"><img src="https://img.shields.io/github/stars/dadastory/CloudRevo?style=for-the-badge" alt="GitHub stars"></a>
+  <a href="https://github.com/dadastory/CloudRevo/forks"><img src="https://img.shields.io/github/forks/dadastory/CloudRevo?style=for-the-badge" alt="GitHub forks"></a>
+  <a href="https://github.com/dadastory/CloudRevo/issues"><img src="https://img.shields.io/github/issues/dadastory/CloudRevo?style=for-the-badge" alt="Open issues"></a>
+</p>
+
+<p align="center">
   <a href="README.md">English</a> ·
   <a href="README_zh-CN.md">简体中文</a> ·
   <a href="README_zh-TW.md">繁體中文</a> ·
@@ -44,6 +52,12 @@
 - [ ] Desktop sync support
 - [ ] Deployment and API documentation
 - [ ] More integration tests
+
+## Community
+
+- Ask questions, share deployment experience, or propose ideas in [GitHub Discussions](https://github.com/dadastory/CloudRevo/discussions).
+- Report reproducible bugs and security-sensitive concerns through [Issues](https://github.com/dadastory/CloudRevo/issues).
+- Star and share CloudRevo if it is useful to you; it makes the project easier to discover.
 
 ## Start locally
 
