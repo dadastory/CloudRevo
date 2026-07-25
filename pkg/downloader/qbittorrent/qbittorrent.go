@@ -212,11 +212,12 @@ func (c *qbittorrentClient) Info(ctx context.Context, handle *downloader.TaskHan
 		Hash:          torrents[0].Hash,
 		Files: lo.Map(files, func(item File, index int) downloader.TaskFile {
 			return downloader.TaskFile{
-				Index:    item.Index,
-				Name:     filepath.ToSlash(item.Name),
-				Size:     item.Size,
-				Progress: item.Progress,
-				Selected: item.Priority > 0,
+				Index:         item.Index,
+				Name:          filepath.ToSlash(item.Name),
+				Size:          item.Size,
+				Progress:      item.Progress,
+				ProgressKnown: true,
+				Selected:      item.Priority > 0,
 			}
 		}),
 	}

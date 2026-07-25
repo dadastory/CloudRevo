@@ -8,8 +8,8 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"path"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -234,6 +234,10 @@ func (m *RemoteDownloadTask) createDownloadTask(ctx context.Context, dep depende
 		}
 
 		torrentUrl = torrentUrls[0].Url
+		// A signed entity URL does not necessarily retain the .torrent suffix.
+		// Mark it internally so Gopeed still follows its native auto-torrent
+		// path. This flag is never accepted from, or serialized back to, users.
+		m.state.TaskOptions = torrentTaskOptions(m.state.TaskOptions)
 	}
 
 	// Create download task
@@ -340,6 +344,14 @@ func (m *RemoteDownloadTask) monitor(ctx context.Context, dep dependency.Dep) (t
 	case downloader.StatusSeeding:
 		m.l.Info("Download task seeding")
 		if m.state.Phase == RemoteDownloadTaskPhaseMonitor {
+			if !remoteDownloadReadyForTransfer(status) {
+				// BitTorrent can report a descriptor or incomplete native task as
+				// seeding. Do not turn that transient state into a missing-file
+				// upload retry; wait for Gopeed to expose the fully materialized
+				// selected files instead.
+				m.ResumeAfter(resumeAfter)
+				return task.StatusSuspending, nil
+			}
 			// Not transferred
 			m.state.Phase = RemoteDownloadTaskPhaseTransfer
 			return task.StatusSuspending, nil
@@ -355,6 +367,9 @@ func (m *RemoteDownloadTask) monitor(ctx context.Context, dep dependency.Dep) (t
 	case downloader.StatusCompleted:
 		m.l.Info("Download task completed")
 		if m.state.Phase == RemoteDownloadTaskPhaseMonitor {
+			if !remoteDownloadReadyForTransfer(status) {
+				return task.StatusError, fmt.Errorf("download reported completion before selected files were materialized: %w", queue.CriticalErr)
+			}
 			// Not transferred
 			m.state.Phase = RemoteDownloadTaskPhaseTransfer
 			return task.StatusSuspending, nil
@@ -404,7 +419,10 @@ func (m *RemoteDownloadTask) slaveTransfer(ctx context.Context, dep dependency.D
 			}
 
 			dst := dstUri.JoinRaw(sanitizeFileName(f.Name))
-			src := path.Join(m.state.Status.SavePath, f.Name)
+			src, err := remoteDownloadSourcePath(m.state.Status.SavePath, f.Name)
+			if err != nil {
+				return task.StatusError, fmt.Errorf("invalid remote download source path for %q: %w", f.Name, err)
+			}
 			payload.Files = append(payload.Files, SlaveUploadEntity{
 				Src:   src,
 				Uri:   dst,
@@ -516,9 +534,20 @@ func (m *RemoteDownloadTask) masterTransfer(ctx context.Context, dep dependency.
 	ae := serializer.NewAggregateError()
 
 	transferFunc := func(workerId int, file downloader.TaskFile) {
+		defer func() {
+			worker <- workerId
+			wg.Done()
+		}()
+
 		sanitizedName := sanitizeFileName(file.Name)
 		dst := dstUri.JoinRaw(sanitizedName)
-		src := filepath.FromSlash(path.Join(m.state.Status.SavePath, file.Name))
+		src, sourceErr := remoteDownloadSourcePath(m.state.Status.SavePath, file.Name)
+		if sourceErr != nil {
+			m.l.Warning("Invalid source path for file %s: %s", file.Name, sourceErr)
+			atomic.AddInt64(&failed, 1)
+			ae.Add(file.Name, fmt.Errorf("invalid source path: %w", sourceErr))
+			return
+		}
 		m.l.Info("Uploading file %s to %s...", src, sanitizedName, dst)
 
 		progressKey := fmt.Sprintf("%s%d", ProgressTypeUploadSinglePrefix, workerId)
@@ -531,8 +560,6 @@ func (m *RemoteDownloadTask) masterTransfer(ctx context.Context, dep dependency.
 
 		defer func() {
 			atomic.AddInt64(&uploadCountProgress.Current, 1)
-			worker <- workerId
-			wg.Done()
 		}()
 
 		fileStream, err := os.Open(src)
@@ -610,6 +637,62 @@ func (m *RemoteDownloadTask) awaitSeeding(ctx context.Context, dep dependency.De
 	return task.StatusSuspending, nil
 }
 
+// remoteDownloadReadyForTransfer verifies the downloader's terminal snapshot
+// against the files Gopeed actually materialized. In particular, a native
+// BitTorrent task may be labelled seeding before any payload has arrived.
+func remoteDownloadReadyForTransfer(status *downloader.TaskStatus) bool {
+	if status == nil || status.SavePath == "" {
+		return false
+	}
+	if status.State != downloader.StatusCompleted && status.State != downloader.StatusSeeding {
+		return false
+	}
+	if status.State == downloader.StatusSeeding && (status.Total <= 0 || status.Downloaded < status.Total) {
+		return false
+	}
+
+	selectedFiles := 0
+	for _, file := range status.Files {
+		if !file.Selected {
+			continue
+		}
+		selectedFiles++
+		path, err := remoteDownloadSourcePath(status.SavePath, file.Name)
+		if err != nil {
+			return false
+		}
+		info, err := os.Stat(path)
+		if err != nil || !info.Mode().IsRegular() || info.Size() != file.Size {
+			return false
+		}
+	}
+
+	return selectedFiles > 0
+}
+
+// remoteDownloadSourcePath converts a Gopeed-reported relative file name into
+// a path below its task directory. Gopeed file lists may contain nested paths,
+// but must never be allowed to escape the per-task download root.
+func remoteDownloadSourcePath(savePath, fileName string) (string, error) {
+	if savePath == "" || fileName == "" {
+		return "", fmt.Errorf("empty download root or file name")
+	}
+	root, err := filepath.Abs(filepath.Clean(savePath))
+	if err != nil {
+		return "", fmt.Errorf("resolve download root: %w", err)
+	}
+	relative := filepath.Clean(filepath.FromSlash(strings.ReplaceAll(fileName, "\\", "/")))
+	if relative == "." || filepath.IsAbs(relative) {
+		return "", fmt.Errorf("file name is not a relative path")
+	}
+	source := filepath.Join(root, relative)
+	resolved, err := filepath.Rel(root, source)
+	if err != nil || resolved == ".." || strings.HasPrefix(resolved, ".."+string(filepath.Separator)) || filepath.IsAbs(resolved) {
+		return "", fmt.Errorf("file path escapes download root")
+	}
+	return source, nil
+}
+
 func (m *RemoteDownloadTask) validateFiles(ctx context.Context, dep dependency.Dep, status *downloader.TaskStatus) error {
 	// Validate files
 	user := inventory.UserFromContext(ctx)
@@ -663,8 +746,100 @@ func (m *RemoteDownloadTask) SetDownloadTarget(ctx context.Context, args ...*dow
 	if m.state.Handle == nil {
 		return fmt.Errorf("download task not created")
 	}
+	if m.state.Status == nil {
+		return fmt.Errorf("download task files are not available")
+	}
 
-	return m.d.SetFilesToDownload(ctx, m.state.Handle, args...)
+	selectedFiles, err := applyDownloadSelection(m.state.Status.Files, args...)
+	if err != nil {
+		return err
+	}
+	previousState, err := json.Marshal(m.state)
+	if err != nil {
+		return fmt.Errorf("snapshot selected download files: %w", err)
+	}
+
+	if err := m.d.SetFilesToDownload(ctx, m.state.Handle, args...); err != nil {
+		return err
+	}
+
+	selected := make(map[int]bool, len(selectedFiles))
+	for _, index := range selectedFiles {
+		selected[index] = true
+	}
+	for index := range m.state.Status.Files {
+		m.state.Status.Files[index].Selected = selected[m.state.Status.Files[index].Index]
+	}
+	m.state.SelectedFiles = selectedFiles
+	state, err := json.Marshal(m.state)
+	if err != nil {
+		return fmt.Errorf("persist selected download files: %w", err)
+	}
+	m.Lock()
+	m.Task.PrivateState = string(state)
+	m.Unlock()
+
+	if err := dependency.FromContext(ctx).RemoteDownloadQueue(ctx).UpdateTask(ctx, m); err != nil {
+		m.restoreDownloadSelection(ctx, previousState)
+		return fmt.Errorf("persist selected download files: %w", err)
+	}
+	return nil
+}
+
+func (m *RemoteDownloadTask) restoreDownloadSelection(ctx context.Context, state []byte) {
+	previous := &RemoteDownloadTaskState{}
+	if err := json.Unmarshal(state, previous); err != nil {
+		return
+	}
+	args := make([]*downloader.SetFileToDownloadArgs, 0)
+	if previous.Status != nil {
+		args = make([]*downloader.SetFileToDownloadArgs, 0, len(previous.Status.Files))
+		for _, file := range previous.Status.Files {
+			args = append(args, &downloader.SetFileToDownloadArgs{Index: file.Index, Download: file.Selected})
+		}
+	}
+	if len(args) > 0 {
+		_ = m.d.SetFilesToDownload(ctx, previous.Handle, args...)
+	}
+	m.state = previous
+	m.Lock()
+	m.Task.PrivateState = string(state)
+	m.Unlock()
+}
+
+func applyDownloadSelection(files []downloader.TaskFile, args ...*downloader.SetFileToDownloadArgs) ([]int, error) {
+	selected := make(map[int]bool, len(files))
+	available := make(map[int]struct{}, len(files))
+	for _, file := range files {
+		available[file.Index] = struct{}{}
+		selected[file.Index] = file.Selected
+	}
+	seen := make(map[int]struct{}, len(args))
+	for _, arg := range args {
+		if arg == nil {
+			return nil, fmt.Errorf("invalid file selection")
+		}
+		if _, ok := available[arg.Index]; !ok {
+			return nil, fmt.Errorf("file selection index %d does not exist", arg.Index)
+		}
+		if _, duplicate := seen[arg.Index]; duplicate {
+			return nil, fmt.Errorf("duplicate file selection index %d", arg.Index)
+		}
+		seen[arg.Index] = struct{}{}
+		selected[arg.Index] = arg.Download
+	}
+
+	result := make([]int, 0, len(selected))
+	for index, enabled := range selected {
+		if enabled {
+			result = append(result, index)
+		}
+	}
+	if len(result) == 0 {
+		return nil, fmt.Errorf("at least one file must remain selected")
+	}
+	sort.Ints(result)
+	return result, nil
 }
 
 // CancelDownload cancels the download task
@@ -796,7 +971,16 @@ func cloneTaskOptions(options *downloader.TaskOptions) *downloader.TaskOptions {
 	if options == nil {
 		return nil
 	}
-	return &downloader.TaskOptions{Connections: options.Connections}
+	return &downloader.TaskOptions{Connections: options.Connections, AutoTorrent: options.AutoTorrent}
+}
+
+func torrentTaskOptions(options *downloader.TaskOptions) *downloader.TaskOptions {
+	cloned := cloneTaskOptions(options)
+	if cloned == nil {
+		cloned = &downloader.TaskOptions{}
+	}
+	cloned.AutoTorrent = true
+	return cloned
 }
 
 func containsRequestControl(value string) bool {

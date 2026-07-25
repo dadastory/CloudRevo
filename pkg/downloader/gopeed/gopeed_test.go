@@ -195,6 +195,19 @@ func TestPreviewResolvesThenDiscardsWithoutCreatingTask(t *testing.T) {
 	}
 }
 
+func TestPreviewCleanupContextSurvivesCallerCancellation(t *testing.T) {
+	caller, cancel := context.WithCancel(context.Background())
+	cancel()
+	cleanup, done := previewCleanupContext(caller)
+	defer done()
+	if err := cleanup.Err(); err != nil {
+		t.Fatalf("cleanup context unexpectedly canceled: %v", err)
+	}
+	if _, ok := cleanup.Deadline(); !ok {
+		t.Fatal("cleanup context must have a bounded deadline")
+	}
+}
+
 func TestPreviewUsesFirstFileNameWhenResourceNameIsEmpty(t *testing.T) {
 	t.Parallel()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -284,6 +297,38 @@ func TestCreateTaskForwardsValidatedTaskConnections(t *testing.T) {
 	_, err := client.CreateTaskWithOptions(context.Background(), "https://downloads.example.test/release.iso", nil, nil, &downloader.TaskOptions{Connections: 8}, nil)
 	if err != nil {
 		t.Fatalf("CreateTaskWithOptions() error = %v", err)
+	}
+}
+
+func TestCreateTaskIgnoresLegacyGroupOptions(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v1/resolve":
+			var payload struct {
+				Opts struct {
+					Extra map[string]any `json:"extra"`
+				} `json:"opts"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+				t.Fatalf("decode resolve payload: %v", err)
+			}
+			if _, forwarded := payload.Opts.Extra["unsafeLegacyOption"]; forwarded {
+				t.Fatalf("legacy group option was forwarded: %#v", payload.Opts.Extra)
+			}
+			writeResult(t, w, http.StatusOK, map[string]any{"id": "resolve-1"})
+		case "/api/v1/tasks":
+			writeResult(t, w, http.StatusOK, "task-1")
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	client := newClient(server.URL, "test-token", "/app/Downloads", "/cloudrevo/data/temp/gopeed", nil)
+	if _, err := client.CreateTask(context.Background(), "https://downloads.example.test/release.iso", map[string]any{"unsafeLegacyOption": true}); err != nil {
+		t.Fatalf("CreateTask() error = %v", err)
 	}
 }
 
@@ -521,11 +566,12 @@ func TestInfoMapsUploadingTaskToSeedingAndUsesLocalTaskPath(t *testing.T) {
 			t.Fatalf("unexpected request path: %s", r.URL.Path)
 		}
 		writeResult(t, w, http.StatusOK, map[string]any{
-			"id":        "task-1",
-			"name":      "archive",
-			"status":    "done",
-			"uploading": true,
-			"size":      30,
+			"id":           "task-1",
+			"name":         "archive",
+			"status":       "done",
+			"uploading":    true,
+			"size":         30,
+			"fileProgress": map[string]any{"0": 5, "2": 10},
 			"progress": map[string]any{
 				"downloaded":  30,
 				"speed":       4,
@@ -534,7 +580,7 @@ func TestInfoMapsUploadingTaskToSeedingAndUsesLocalTaskPath(t *testing.T) {
 			},
 			"meta": map[string]any{
 				"opts": map[string]any{"path": "/app/Downloads/task-1", "selectFiles": []int{0, 2}},
-				"res": map[string]any{"files": []map[string]any{
+				"res": map[string]any{"hash": "torrent-info-hash", "files": []map[string]any{
 					{"name": "one.txt", "path": "one.txt", "size": 10},
 					{"name": "two.txt", "path": "two.txt", "size": 10},
 					{"name": "three.txt", "path": "three.txt", "size": 10},
@@ -562,6 +608,12 @@ func TestInfoMapsUploadingTaskToSeedingAndUsesLocalTaskPath(t *testing.T) {
 	}
 	if len(status.Files) != 3 || !status.Files[0].Selected || status.Files[1].Selected || !status.Files[2].Selected {
 		t.Fatalf("unexpected selected files: %#v", status.Files)
+	}
+	if status.Hash != "torrent-info-hash" {
+		t.Fatalf("hash = %q, want torrent info hash", status.Hash)
+	}
+	if !status.Files[0].ProgressKnown || status.Files[0].Progress != 0.5 || status.Files[1].ProgressKnown || !status.Files[2].ProgressKnown || status.Files[2].Progress != 1 {
+		t.Fatalf("unexpected per-file progress telemetry: %#v", status.Files)
 	}
 }
 
@@ -674,6 +726,10 @@ func TestSetFilesToDownloadPatchesZeroBasedSelection(t *testing.T) {
 				"id": "task-1",
 				"meta": map[string]any{
 					"opts": map[string]any{"selectFiles": []int{0, 1}},
+					"res": map[string]any{"files": []map[string]any{
+						{"name": "one.txt", "path": "one.txt", "size": 10},
+						{"name": "two.txt", "path": "two.txt", "size": 10},
+					}},
 				},
 			})
 		case r.Method == http.MethodPatch && r.URL.Path == "/api/v1/tasks/task-1":

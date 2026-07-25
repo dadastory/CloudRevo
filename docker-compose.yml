@@ -14,6 +14,30 @@ services:
     profiles:
       - test
 
+  gopeed-contract:
+    build:
+      context: .
+      target: test
+      args: *local-build-args
+    profiles:
+      - test
+    depends_on:
+      gopeed:
+        condition: service_healthy
+      download-fixture:
+        condition: service_started
+    environment:
+      GOPEED_CONTRACT_URL: http://gopeed:9999
+      GOPEED_CONTRACT_TOKEN: "${GOPEED_API_TOKEN:?Set GOPEED_API_TOKEN in .env before starting Compose}"
+      GOPEED_CONTRACT_SOURCE_HOST: gopeed-contract-source
+    volumes:
+      - ./storage/cloudrevo/temp/gopeed:/cloudrevo/data/temp/gopeed
+    networks:
+      default:
+        aliases:
+          - gopeed-contract-source
+    command: ["go", "test", "./pkg/downloader/gopeed", "-run", "TestComposeGopeed", "-count=1"]
+
   frontend-test:
     build:
       context: .
@@ -21,6 +45,14 @@ services:
       args: *local-build-args
     profiles:
       - test
+
+  download-fixture:
+    image: busybox:1.36.1
+    command: ["httpd", "-f", "-p", "8080", "-h", "/srv"]
+    profiles:
+      - test
+    volumes:
+      - ./tests/fixtures/gopeed:/srv:ro
 
   cloudrevo:
     build:
@@ -91,10 +123,25 @@ services:
       dockerfile: .build/gopeed.Dockerfile
       args:
         VERSION: v1.9.3
+        GO_PROXY: https://goproxy.cn|https://proxy.golang.org,direct
     container_name: gopeed
     restart: unless-stopped
     environment:
       GOPEED_APITOKEN: "${GOPEED_API_TOKEN:?Set GOPEED_API_TOKEN in .env before starting Compose}"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
+    mem_limit: 768m
+    cpus: "1.5"
     volumes:
       - ./storage/gopeed:/app/storage
       - ./storage/cloudrevo/temp/gopeed:/app/Downloads

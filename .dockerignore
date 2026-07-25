@@ -7,4 +7,5 @@ redis
 storage
 assets/node_modules
 assets/build
+third_party/gopeed/pkg/download/*.data
 cloudrevo

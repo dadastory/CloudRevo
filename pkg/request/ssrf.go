@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"regexp"
 	"strings"
 )
 
@@ -19,11 +20,12 @@ var ErrUnsafeURL = errors.New("URL is not allowed")
 var downloadAllowedSchemes = map[string]struct{}{
 	"http":   {},
 	"https":  {},
-	"ftp":    {},
-	"ftps":   {},
-	"sftp":   {},
 	"magnet": {},
 }
+
+// eD2K file URIs use `|` separators that net/url deliberately rejects in a
+// raw URL. The maintained Gopeed build supports only this canonical file form.
+var ed2kFileURI = regexp.MustCompile(`(?i)^ed2k://\|file\|[^|/\r\n]+\|[1-9][0-9]*\|[0-9a-f]{32}\|/(?:\|.*)?$`)
 
 // trackerAllowedSchemes are schemes valid inside magnet tr=/ws=/xs=/as= params
 // that we recognize and validate. Anything else is treated as non-network
@@ -88,6 +90,12 @@ func ValidateExternalURL(ctx context.Context, raw string, opt SSRFOptions) error
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return fmt.Errorf("empty URL: %w", ErrUnsafeURL)
+	}
+	if strings.HasPrefix(strings.ToLower(raw), "ed2k://") {
+		if !ed2kFileURI.MatchString(raw) {
+			return fmt.Errorf("invalid ed2k URI: %w", ErrUnsafeURL)
+		}
+		return nil
 	}
 
 	u, err := url.Parse(raw)

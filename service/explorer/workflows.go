@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/gob"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -26,6 +27,11 @@ import (
 	"github.com/gofrs/uuid"
 	"github.com/samber/lo"
 	"golang.org/x/tools/container/intsets"
+)
+
+const (
+	workflowEventHeartbeatInterval = 25 * time.Second
+	magnetPreviewTimeout           = 15 * time.Second
 )
 
 // ItemMoveService 处理多文件/目录移动
@@ -247,11 +253,25 @@ func (service *DownloadWorkflowService) PreviewDownload(c *gin.Context) (*downlo
 	if !ok {
 		return nil, serializer.NewError(serializer.CodeParamErr, "Configured downloader does not support preview", nil)
 	}
-	status, err := preview.PreviewTask(c, service.Src[0], user.Edges.Group.Settings.RemoteDownloadOptions, service.RequestOptions, service.TaskOptions)
+	previewCtx, cancel := remoteDownloadPreviewContext(c, service.Src[0])
+	defer cancel()
+	status, err := preview.PreviewTask(previewCtx, service.Src[0], user.Edges.Group.Settings.RemoteDownloadOptions, service.RequestOptions, service.TaskOptions)
 	if err != nil {
+		if errors.Is(previewCtx.Err(), context.DeadlineExceeded) {
+			return nil, serializer.NewError(serializer.CodeCreateTaskError, "Magnet metadata resolution timed out. Please retry.", nil)
+		}
 		return nil, serializer.NewError(serializer.CodeCreateTaskError, "Failed to preview download", err)
 	}
 	return status, nil
+}
+
+// remoteDownloadPreviewContext constrains only magnet metadata resolution.
+// Other protocols retain their existing request context and limits.
+func remoteDownloadPreviewContext(parent context.Context, source string) (context.Context, context.CancelFunc) {
+	if strings.HasPrefix(strings.ToLower(strings.TrimSpace(source)), "magnet:?") {
+		return context.WithTimeout(parent, magnetPreviewTimeout)
+	}
+	return parent, func() {}
 }
 
 type (
@@ -492,6 +512,8 @@ func StreamWorkflowEvents(c *gin.Context) error {
 
 	WriteEventSourceHeader(c)
 	WriteEventSource(c, "subscribed", nil)
+	heartbeat := time.NewTicker(workflowEventHeartbeatInterval)
+	defer heartbeat.Stop()
 	for {
 		select {
 		case <-c.Request.Context().Done():
@@ -500,6 +522,8 @@ func StreamWorkflowEvents(c *gin.Context) error {
 			return nil
 		case <-updates:
 			WriteEventSource(c, "task", nil)
+		case <-heartbeat.C:
+			WriteEventSourceComment(c, "keepalive")
 		}
 	}
 }
@@ -522,6 +546,9 @@ func CancelDownloadTask(c *gin.Context, taskID int) error {
 	if downloadTask, ok := t.(*workflows.RemoteDownloadTask); ok {
 		if err := downloadTask.CancelDownload(c); err != nil {
 			return serializer.NewError(serializer.CodeInternalSetting, "Failed to cancel download task", err)
+		}
+		if err := dep.RemoteDownloadQueue(c).CancelTask(c, t); err != nil {
+			return serializer.NewError(serializer.CodeParamErr, "Task is no longer cancellable", err)
 		}
 	}
 
@@ -561,7 +588,7 @@ func RetryDownloadTask(c *gin.Context, taskID int) (*TaskResponse, error) {
 	if err := service.Validate(c); err != nil {
 		return nil, err
 	}
-	newTask, err := workflows.NewRemoteDownloadTaskWithConfig(c, state.SrcUri, state.SrcFileUri, state.Dst, service.RequestOptions, service.TaskOptions, nil, service.DisplayName)
+	newTask, err := workflows.NewRemoteDownloadTaskWithConfig(c, state.SrcUri, state.SrcFileUri, state.Dst, service.RequestOptions, service.TaskOptions, state.SelectedFiles, service.DisplayName)
 	if err != nil {
 		return nil, serializer.NewError(serializer.CodeInternalSetting, "Failed to create retry task", err)
 	}

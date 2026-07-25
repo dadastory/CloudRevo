@@ -27,6 +27,24 @@ func TestValidateExternalURL_Scheme(t *testing.T) {
 	}
 }
 
+func TestValidateExternalURL_UsesGopeedCompatibleProtocols(t *testing.T) {
+	ctx := context.Background()
+	validED2K := "ed2k://|file|fixture.iso|4630972416|8867C5E54405FF9452225B66EFEE690A|/"
+	if err := request.ValidateExternalURL(ctx, validED2K, request.SSRFOptions{}); err != nil {
+		t.Fatalf("ValidateExternalURL() rejected valid ed2k URI: %v", err)
+	}
+
+	for _, raw := range []string{
+		"ed2k://|file|fixture.iso|0|not-a-hash|/",
+		"ftp://downloads.example.test/file.iso",
+		"ftps://downloads.example.test/file.iso",
+		"sftp://downloads.example.test/file.iso",
+	} {
+		err := request.ValidateExternalURL(ctx, raw, request.SSRFOptions{})
+		assert.ErrorIs(t, err, request.ErrUnsafeURL, "raw=%q", raw)
+	}
+}
+
 func TestValidateExternalURL_LocalLiterals(t *testing.T) {
 	ctx := context.Background()
 	cases := []string{

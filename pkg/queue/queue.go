@@ -23,8 +23,11 @@ type (
 		Shutdown()
 		// SubmitTask submits a Task to the queue.
 		QueueTask(ctx context.Context, t Task) error
-		// CancelTask removes a task that has not started from the queue.
+		// CancelTask persists cancellation for queued, suspended, or processing tasks.
 		CancelTask(ctx context.Context, t Task) error
+		// UpdateTask persists an in-place state update without changing the task
+		// lifecycle status and publishes the owner-scoped task event.
+		UpdateTask(ctx context.Context, t Task) error
 		// BusyWorkers returns the numbers of workers in the running process.
 		BusyWorkers() int
 		// BusyWorkers returns the numbers of success tasks.
@@ -38,15 +41,18 @@ type (
 	}
 	queue struct {
 		sync.Mutex
-		routineGroup *routineGroup
-		metric       *metric
-		quit         chan struct{}
-		ready        chan struct{}
-		scheduler    Scheduler
-		stopOnce     sync.Once
-		stopFlag     int32
-		rootCtx      context.Context
-		cancel       context.CancelFunc
+		routineGroup   *routineGroup
+		metric         *metric
+		quit           chan struct{}
+		ready          chan struct{}
+		scheduler      Scheduler
+		stopOnce       sync.Once
+		stopFlag       int32
+		rootCtx        context.Context
+		cancel         context.CancelFunc
+		activeMu       sync.Mutex
+		activeCancels  map[int]context.CancelFunc
+		activeCanceled map[int]struct{}
 
 		// Dependencies
 		logger     logging.Logger
@@ -77,18 +83,20 @@ func New(l logging.Logger, taskClient inventory.TaskClient, registry TaskRegistr
 	ctx, cancel := context.WithCancel(context.Background())
 
 	return &queue{
-		routineGroup: newRoutineGroup(),
-		scheduler:    NewFifoScheduler(0, l),
-		quit:         make(chan struct{}),
-		ready:        make(chan struct{}, 1),
-		metric:       &metric{},
-		options:      o,
-		logger:       l,
-		registry:     registry,
-		taskClient:   taskClient,
-		dep:          dep,
-		rootCtx:      ctx,
-		cancel:       cancel,
+		routineGroup:   newRoutineGroup(),
+		scheduler:      NewFifoScheduler(0, l),
+		quit:           make(chan struct{}),
+		ready:          make(chan struct{}, 1),
+		metric:         &metric{},
+		options:        o,
+		logger:         l,
+		registry:       registry,
+		taskClient:     taskClient,
+		dep:            dep,
+		rootCtx:        ctx,
+		cancel:         cancel,
+		activeCancels:  make(map[int]context.CancelFunc),
+		activeCanceled: make(map[int]struct{}),
 	}
 }
 
@@ -212,7 +220,11 @@ func (q *queue) QueueTask(ctx context.Context, t Task) error {
 }
 
 func (q *queue) CancelTask(ctx context.Context, t Task) error {
-	if t.Status() != task.StatusQueued {
+	if t.Status() == task.StatusProcessing {
+		q.cancelActiveWorker(t.ID())
+		return q.transitStatus(ctx, t, task.StatusCanceled)
+	}
+	if t.Status() != task.StatusQueued && t.Status() != task.StatusSuspending {
 		return ErrTaskNotWaiting
 	}
 	removed, err := q.scheduler.Remove(t.ID())
@@ -223,6 +235,46 @@ func (q *queue) CancelTask(ctx context.Context, t Task) error {
 		return ErrTaskNotWaiting
 	}
 	return q.transitStatus(ctx, t, task.StatusCanceled)
+}
+
+func (q *queue) UpdateTask(ctx context.Context, t Task) error {
+	if t.Status() == "" {
+		return fmt.Errorf("cannot persist task without a status")
+	}
+	return persistTask(ctx, t, t.Status(), q)
+}
+
+func (q *queue) registerActiveWorker(taskID int, cancel context.CancelFunc) {
+	q.activeMu.Lock()
+	defer q.activeMu.Unlock()
+	q.activeCancels[taskID] = cancel
+	delete(q.activeCanceled, taskID)
+}
+
+func (q *queue) unregisterActiveWorker(taskID int) {
+	q.activeMu.Lock()
+	defer q.activeMu.Unlock()
+	delete(q.activeCancels, taskID)
+	delete(q.activeCanceled, taskID)
+}
+
+func (q *queue) cancelActiveWorker(taskID int) {
+	q.activeMu.Lock()
+	cancel := q.activeCancels[taskID]
+	if cancel != nil {
+		q.activeCanceled[taskID] = struct{}{}
+	}
+	q.activeMu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+}
+
+func (q *queue) activeWorkerCanceled(taskID int) bool {
+	q.activeMu.Lock()
+	defer q.activeMu.Unlock()
+	_, canceled := q.activeCanceled[taskID]
+	return canceled
 }
 
 // newContext creates a new context for a new Task iteration.
@@ -236,7 +288,12 @@ func (q *queue) newContext(t Task) context.Context {
 }
 
 func (q *queue) work(t Task) {
-	ctx := q.newContext(t)
+	ctx, cancel := context.WithCancel(q.newContext(t))
+	q.registerActiveWorker(t.ID(), cancel)
+	defer func() {
+		q.unregisterActiveWorker(t.ID())
+		cancel()
+	}()
 	l := logging.FromContext(ctx)
 	timeIterationStart := time.Now()
 
@@ -265,6 +322,9 @@ func (q *queue) work(t Task) {
 		timeIterationStart = time.Now()
 		var next task.Status
 		next, err = q.run(ctx, t)
+		if q.activeWorkerCanceled(t.ID()) || t.Status() == task.StatusCanceled {
+			break
+		}
 		if err != nil {
 			t.OnError(err, time.Since(timeIterationStart))
 			l.Error("runtime error in queue %q: %s", q.name, err.Error())
@@ -339,6 +399,9 @@ func (q *queue) run(ctx context.Context, t Task) (task.Status, error) {
 	case p := <-panicChan:
 		panic(p)
 	case <-ctx.Done(): // timeout reached
+		if q.activeWorkerCanceled(t.ID()) {
+			return task.StatusCanceled, nil
+		}
 		return task.StatusError, ctx.Err()
 	case <-q.quit: // shutdown service
 		// cancel job

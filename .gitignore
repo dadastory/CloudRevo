@@ -38,6 +38,7 @@ data/
 tmp/
 .devcontainer/
 cloudrevo
+/storage/
 
 # OpenSpec planning artifacts are local-only.
 /openspec/

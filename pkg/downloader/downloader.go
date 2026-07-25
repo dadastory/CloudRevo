@@ -50,6 +50,9 @@ type (
 	// configure for an individual remote download.
 	TaskOptions struct {
 		Connections int `json:"connections,omitempty"`
+		// AutoTorrent is set only by the workflow for a CloudRevo-hosted
+		// torrent file. It deliberately cannot be supplied through the API.
+		AutoTorrent bool `json:"-"`
 	}
 	// SourceHTTPError identifies an HTTP response returned by the requested
 	// download source, rather than by the downloader service itself.
@@ -59,8 +62,9 @@ type (
 
 	// TaskHandle represents a task handle for future operations
 	TaskHandle struct {
-		ID   string `json:"id"`
-		Hash string `json:"hash"`
+		ID       string `json:"id"`
+		Hash     string `json:"hash"`
+		ParentID string `json:"parent_id,omitempty"`
 	}
 	Status     string
 	TaskStatus struct {
@@ -81,11 +85,12 @@ type (
 	}
 
 	TaskFile struct {
-		Index    int     `json:"index"`
-		Name     string  `json:"name"`
-		Size     int64   `json:"size"`
-		Progress float64 `json:"progress"`
-		Selected bool    `json:"selected"`
+		Index         int     `json:"index"`
+		Name          string  `json:"name"`
+		Size          int64   `json:"size"`
+		Progress      float64 `json:"progress"`
+		ProgressKnown bool    `json:"progress_known,omitempty"`
+		Selected      bool    `json:"selected"`
 	}
 
 	SetFileToDownloadArgs struct {

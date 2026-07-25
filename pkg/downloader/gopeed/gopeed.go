@@ -15,6 +15,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/dadastory/CloudRevo/inventory/types"
 	"github.com/dadastory/CloudRevo/pkg/downloader"
@@ -51,13 +52,17 @@ func (e *apiError) Error() string {
 
 const gopeedTaskNotFoundCode = 2001
 
+const previewCleanupTimeout = 5 * time.Second
+
 type task struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	Status    string `json:"status"`
-	Uploading bool   `json:"uploading"`
-	Size      int64  `json:"size"`
-	Progress  struct {
+	ID         string `json:"id"`
+	Name       string `json:"name"`
+	Protocol   string `json:"protocol"`
+	FollowedBy string `json:"followedBy"`
+	Status     string `json:"status"`
+	Uploading  bool   `json:"uploading"`
+	Size       int64  `json:"size"`
+	Progress   struct {
 		Downloaded  int64 `json:"downloaded"`
 		Speed       int64 `json:"speed"`
 		Uploaded    int64 `json:"uploaded"`
@@ -69,6 +74,7 @@ type task struct {
 		} `json:"opts"`
 		Res struct {
 			Name  string `json:"name"`
+			Hash  string `json:"hash"`
 			Files []struct {
 				Name string `json:"name"`
 				Path string `json:"path"`
@@ -76,6 +82,7 @@ type task struct {
 			} `json:"files"`
 		} `json:"res"`
 	} `json:"meta"`
+	FileProgress map[int]int64 `json:"fileProgress"`
 }
 
 func newClient(server, token, downloadRoot, tempRoot string, options map[string]any) *client {
@@ -131,7 +138,7 @@ func (c *client) CreateTaskWithOptions(ctx context.Context, source string, group
 	if len(selectedFiles) > 0 {
 		opts["selectFiles"] = selectedFiles
 	}
-	if extra := gopeedTaskOptions(c.options, groupOptions, taskOptions); len(extra) > 0 {
+	if extra := gopeedTaskOptions(source, taskOptions); len(extra) > 0 {
 		opts["extra"] = extra
 	}
 
@@ -139,7 +146,7 @@ func (c *client) CreateTaskWithOptions(ctx context.Context, source string, group
 		ID string `json:"id"`
 	}
 	request := map[string]any{"url": source}
-	if requestOptions != nil && (requestOptions.Method != "" || len(requestOptions.Headers) > 0 || requestOptions.Body != "") {
+	if isHTTPSource(source) && requestOptions != nil && (requestOptions.Method != "" || len(requestOptions.Headers) > 0 || requestOptions.Body != "") {
 		request["extra"] = map[string]any{
 			"method": requestOptions.Method,
 			"header": requestOptions.Headers,
@@ -173,11 +180,11 @@ func (c *client) PreviewTask(ctx context.Context, source string, groupOptions ma
 		return nil, fmt.Errorf("create preview UUID: %w", err)
 	}
 	request := map[string]any{"url": source}
-	if requestOptions != nil && (requestOptions.Method != "" || len(requestOptions.Headers) > 0 || requestOptions.Body != "") {
+	if isHTTPSource(source) && requestOptions != nil && (requestOptions.Method != "" || len(requestOptions.Headers) > 0 || requestOptions.Body != "") {
 		request["extra"] = map[string]any{"method": requestOptions.Method, "header": requestOptions.Headers, "body": requestOptions.Body}
 	}
 	opts := map[string]any{"path": path.Join(c.downloadRoot, "preview-"+guid.String())}
-	if extra := gopeedTaskOptions(c.options, groupOptions, taskOptions); len(extra) > 0 {
+	if extra := gopeedTaskOptions(source, taskOptions); len(extra) > 0 {
 		opts["extra"] = extra
 	}
 	var resolved struct {
@@ -197,7 +204,9 @@ func (c *client) PreviewTask(ctx context.Context, source string, groupOptions ma
 	// Some protocol extensions return a complete resource directly and do not
 	// allocate a resolver ID. Only retained resolvers need explicit cleanup.
 	if resolved.ID != "" {
-		if err := c.call(ctx, http.MethodDelete, "/api/v1/resolve/"+url.PathEscape(resolved.ID), nil, nil); err != nil {
+		cleanupCtx, cancel := previewCleanupContext(ctx)
+		defer cancel()
+		if err := c.call(cleanupCtx, http.MethodDelete, "/api/v1/resolve/"+url.PathEscape(resolved.ID), nil, nil); err != nil {
 			return nil, fmt.Errorf("discard Gopeed preview: %w", err)
 		}
 	}
@@ -221,6 +230,13 @@ func (c *client) PreviewTask(ctx context.Context, source string, groupOptions ma
 	return &downloader.TaskStatus{Name: displayName, Total: total, Files: files}, nil
 }
 
+// previewCleanupContext intentionally detaches cancellation from the caller:
+// a resolver returned an ID and must be discarded even if the browser closes
+// immediately after receiving its metadata. The cleanup remains bounded.
+func previewCleanupContext(parent context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.WithoutCancel(parent), previewCleanupTimeout)
+}
+
 func (c *client) Info(ctx context.Context, handle *downloader.TaskHandle) (*downloader.TaskStatus, error) {
 	if !isTaskUUID(handle.Hash) {
 		return nil, fmt.Errorf("invalid Gopeed task path key")
@@ -229,6 +245,13 @@ func (c *client) Info(ctx context.Context, handle *downloader.TaskHandle) (*down
 	item, err := c.getTask(ctx, handle.ID)
 	if err != nil {
 		return nil, err
+	}
+	if item.FollowedBy != "" {
+		return &downloader.TaskStatus{FollowedBy: &downloader.TaskHandle{
+			ID:       item.FollowedBy,
+			Hash:     handle.Hash,
+			ParentID: handle.ID,
+		}}, nil
 	}
 
 	selected := selectedFileIndexes(item)
@@ -260,15 +283,17 @@ func (c *client) Info(ctx context.Context, handle *downloader.TaskHandle) (*down
 			Selected: selected[index],
 		})
 	}
-	progress := float64(0)
-	if total > 0 {
-		progress = float64(item.Progress.Downloaded) / float64(total)
+	for index := range files {
+		completed, known := item.FileProgress[index]
+		if !known || files[index].Size <= 0 {
+			continue
+		}
+		progress := float64(completed) / float64(files[index].Size)
 		if progress > 1 {
 			progress = 1
 		}
-	}
-	for index := range files {
 		files[index].Progress = progress
+		files[index].ProgressKnown = true
 	}
 
 	name := displayName(item.Name, item.Meta.Res.Name, item.Meta.Res.Files)
@@ -280,6 +305,7 @@ func (c *client) Info(ctx context.Context, handle *downloader.TaskHandle) (*down
 		DownloadSpeed: item.Progress.Speed,
 		Uploaded:      item.Progress.Uploaded,
 		UploadSpeed:   item.Progress.UploadSpeed,
+		Hash:          item.Meta.Res.Hash,
 		SavePath:      path.Join(c.tempRoot, handle.Hash),
 		Files:         files,
 		ErrorMessage:  errorMessage(item.Status),
@@ -287,10 +313,16 @@ func (c *client) Info(ctx context.Context, handle *downloader.TaskHandle) (*down
 }
 
 func (c *client) Cancel(ctx context.Context, handle *downloader.TaskHandle) error {
-	if err := c.call(ctx, http.MethodDelete, "/api/v1/tasks/"+url.PathEscape(handle.ID)+"?force=true", nil, nil); err != nil {
-		var apiErr *apiError
-		if !errors.As(err, &apiErr) || apiErr.Code != gopeedTaskNotFoundCode {
-			return fmt.Errorf("delete Gopeed task: %w", err)
+	ids := []string{handle.ID}
+	if handle.ParentID != "" && handle.ParentID != handle.ID {
+		ids = append(ids, handle.ParentID)
+	}
+	for _, id := range ids {
+		if err := c.call(ctx, http.MethodDelete, "/api/v1/tasks/"+url.PathEscape(id)+"?force=true", nil, nil); err != nil {
+			var apiErr *apiError
+			if !errors.As(err, &apiErr) || apiErr.Code != gopeedTaskNotFoundCode {
+				return fmt.Errorf("delete Gopeed task: %w", err)
+			}
 		}
 	}
 	if isTaskUUID(handle.Hash) {
@@ -307,12 +339,23 @@ func (c *client) SetFilesToDownload(ctx context.Context, handle *downloader.Task
 		return err
 	}
 	selected := selectedFileIndexes(item)
+	seen := make(map[int]struct{}, len(args))
 	for _, arg := range args {
+		if arg == nil || arg.Index < 0 || arg.Index >= len(item.Meta.Res.Files) {
+			return fmt.Errorf("invalid Gopeed file selection")
+		}
+		if _, exists := seen[arg.Index]; exists {
+			return fmt.Errorf("duplicate Gopeed file selection index %d", arg.Index)
+		}
+		seen[arg.Index] = struct{}{}
 		if arg.Download {
 			selected[arg.Index] = true
 		} else {
 			delete(selected, arg.Index)
 		}
+	}
+	if len(selected) == 0 {
+		return fmt.Errorf("at least one Gopeed file must remain selected")
 	}
 
 	indices := make([]int, 0, len(selected))
@@ -437,23 +480,34 @@ func (c *client) call(ctx context.Context, method, endpoint string, payload any,
 	return nil
 }
 
-func mergeOptions(defaults, overrides map[string]any) map[string]any {
-	merged := make(map[string]any, len(defaults)+len(overrides))
-	for key, value := range defaults {
-		merged[key] = value
+func gopeedTaskOptions(source string, taskOptions *downloader.TaskOptions) map[string]any {
+	merged := make(map[string]any)
+	if taskOptions != nil && taskOptions.Connections != 0 {
+		merged["connections"] = taskOptions.Connections
 	}
-	for key, value := range overrides {
-		merged[key] = value
+	if isDirectTorrentURL(source) || (taskOptions != nil && taskOptions.AutoTorrent) {
+		merged["autoTorrent"] = true
+		// The parent task retains its child relation until CloudRevo has
+		// durably followed it, so cleanup can remove both task records.
+		merged["deleteTorrentAfterDownload"] = false
 	}
 	return merged
 }
 
-func gopeedTaskOptions(defaults, overrides map[string]any, taskOptions *downloader.TaskOptions) map[string]any {
-	merged := mergeOptions(defaults, overrides)
-	if taskOptions != nil && taskOptions.Connections != 0 {
-		merged["connections"] = taskOptions.Connections
+func isHTTPSource(source string) bool {
+	u, err := url.Parse(source)
+	if err != nil {
+		return false
 	}
-	return merged
+	return strings.EqualFold(u.Scheme, "http") || strings.EqualFold(u.Scheme, "https")
+}
+
+func isDirectTorrentURL(source string) bool {
+	u, err := url.Parse(source)
+	if err != nil || !isHTTPSource(source) {
+		return false
+	}
+	return strings.HasSuffix(strings.ToLower(u.Path), ".torrent")
 }
 
 func displayName(taskName, resourceName string, files []struct {

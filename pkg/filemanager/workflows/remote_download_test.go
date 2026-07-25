@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -11,6 +13,55 @@ import (
 	"github.com/dadastory/CloudRevo/inventory"
 	"github.com/dadastory/CloudRevo/pkg/downloader"
 )
+
+func TestRemoteDownloadTransferReadinessRequiresMaterializedSelectedFiles(t *testing.T) {
+	dir := t.TempDir()
+	status := &downloader.TaskStatus{
+		State:      downloader.StatusSeeding,
+		Total:      4,
+		Downloaded: 0,
+		SavePath:   dir,
+		Files: []downloader.TaskFile{
+			{Index: 0, Name: "release.iso", Size: 4, Selected: true},
+		},
+	}
+	if remoteDownloadReadyForTransfer(status) {
+		t.Fatal("zero-byte seeding task must not be transferable")
+	}
+
+	status.Downloaded = status.Total
+	if remoteDownloadReadyForTransfer(status) {
+		t.Fatal("missing selected file must not be transferable")
+	}
+	if err := os.WriteFile(filepath.Join(dir, "release.iso"), []byte("data"), 0o600); err != nil {
+		t.Fatalf("write selected file: %v", err)
+	}
+	if !remoteDownloadReadyForTransfer(status) {
+		t.Fatal("materialized fully downloaded seeding task must be transferable")
+	}
+}
+
+func TestRemoteDownloadTransferReadinessRejectsSelectedFileOutsideSavePath(t *testing.T) {
+	dir := t.TempDir()
+	outside := filepath.Join(filepath.Dir(dir), "outside-release.iso")
+	if err := os.WriteFile(outside, []byte("data"), 0o600); err != nil {
+		t.Fatalf("write outside file: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Remove(outside) })
+
+	status := &downloader.TaskStatus{
+		State:      downloader.StatusCompleted,
+		Total:      4,
+		Downloaded: 4,
+		SavePath:   dir,
+		Files: []downloader.TaskFile{
+			{Index: 0, Name: "../outside-release.iso", Size: 4, Selected: true},
+		},
+	}
+	if remoteDownloadReadyForTransfer(status) {
+		t.Fatal("selected file outside the download directory must not be transferable")
+	}
+}
 
 func TestValidateRequestOptionsNormalizesAuthorizedHeaders(t *testing.T) {
 	options, err := ValidateRequestOptions("https://downloads.example.test/file", &downloader.RequestOptions{
@@ -108,6 +159,20 @@ func TestValidateTaskOptionsRestrictsConnectionsToHTTPSources(t *testing.T) {
 	}
 }
 
+func TestTorrentTaskOptionsAreInternalAndPreserveConnections(t *testing.T) {
+	options := torrentTaskOptions(&downloader.TaskOptions{Connections: 32})
+	if !options.AutoTorrent || options.Connections != 32 {
+		t.Fatalf("torrent task options = %#v, want internal auto torrent with connections", options)
+	}
+	encoded, err := json.Marshal(options)
+	if err != nil {
+		t.Fatalf("marshal task options: %v", err)
+	}
+	if strings.Contains(string(encoded), "AutoTorrent") || strings.Contains(string(encoded), "auto_torrent") {
+		t.Fatalf("internal auto-torrent flag leaked into task state: %s", encoded)
+	}
+}
+
 func TestRemoteDownloadSummaryUsesPreflightNameBeforeStatus(t *testing.T) {
 	ctx := context.WithValue(context.Background(), inventory.UserCtx{}, &ent.User{})
 	task, err := NewRemoteDownloadTaskWithConfig(ctx, "https://downloads.example.test/release.iso", "", "/My", nil, &downloader.TaskOptions{Connections: 8}, nil, "release.iso")
@@ -117,5 +182,30 @@ func TestRemoteDownloadSummaryUsesPreflightNameBeforeStatus(t *testing.T) {
 	summary := task.(*RemoteDownloadTask).Summarize(nil)
 	if summary.Props[SummaryKeyDownloadStatus].(*downloader.TaskStatus).Name != "release.iso" {
 		t.Fatalf("queued summary did not retain preflight name: %#v", summary.Props[SummaryKeyDownloadStatus])
+	}
+}
+
+func TestApplyDownloadSelectionRejectsInvalidOrEmptyResult(t *testing.T) {
+	files := []downloader.TaskFile{
+		{Index: 0, Selected: true},
+		{Index: 1, Selected: false},
+	}
+	for _, args := range [][]*downloader.SetFileToDownloadArgs{
+		{{Index: -1, Download: true}},
+		{{Index: 2, Download: true}},
+		{{Index: 1, Download: true}, {Index: 1, Download: false}},
+		{{Index: 0, Download: false}},
+	} {
+		if _, err := applyDownloadSelection(files, args...); err == nil {
+			t.Fatalf("applyDownloadSelection(%#v) error = nil", args)
+		}
+	}
+
+	selected, err := applyDownloadSelection(files, &downloader.SetFileToDownloadArgs{Index: 1, Download: true})
+	if err != nil {
+		t.Fatalf("applyDownloadSelection() error = %v", err)
+	}
+	if len(selected) != 2 || selected[0] != 0 || selected[1] != 1 {
+		t.Fatalf("selected = %#v, want [0 1]", selected)
 	}
 }

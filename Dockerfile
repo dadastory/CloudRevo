@@ -44,6 +44,7 @@ RUN sed -i \
 
 COPY assets ./
 COPY README.md README_zh-CN.md /src/
+COPY .build/gopeed.Dockerfile docker-compose.yml .github/workflows/release.yml /src/
 
 FROM node:22-alpine AS frontend-build
 

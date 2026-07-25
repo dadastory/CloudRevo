@@ -474,6 +474,16 @@ func init() {
 				q.metric.IncFailureTask()
 				return persistTask(ctx, task, newStatus, q)
 			},
+			task.StatusCanceled: func(ctx context.Context, task Task, newStatus task.Status, q *queue) error {
+				q.metric.DecSuspendingTask()
+				if err := task.Cleanup(ctx); err != nil {
+					q.logger.Error("Task cleanup failed: %s", err.Error())
+				}
+				if q.registry != nil {
+					q.registry.Delete(task.ID())
+				}
+				return persistTask(ctx, task, newStatus, q)
+			},
 		},
 	}
 

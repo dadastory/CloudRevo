@@ -568,4 +568,11 @@ func WriteEventSource(c *gin.Context, event string, data any) {
 	c.Writer.Flush()
 }
 
+// WriteEventSourceComment writes an SSE comment frame. It intentionally carries
+// no application data and keeps idle streams alive through reverse proxies.
+func WriteEventSourceComment(c *gin.Context, comment string) {
+	c.Writer.Write([]byte(fmt.Sprintf(": %s\n\n", comment)))
+	c.Writer.Flush()
+}
+
 var ErrSSETakeOver = errors.New("SSE take over")
