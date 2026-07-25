@@ -3,7 +3,7 @@
     <picture>
       <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/dadastory/CloudRevo/main/docs/brand/logo_light.svg">
       <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/dadastory/CloudRevo/main/docs/brand/logo.svg">
-      <img src="https://raw.githubusercontent.com/dadastory/CloudRevo/main/docs/brand/logo.svg" width="500" alt="CloudRevo">
+      <img src="https://raw.githubusercontent.com/dadastory/CloudRevo/main/docs/brand/logo.svg" width="380" alt="CloudRevo">
     </picture>
   </a>
 </p>

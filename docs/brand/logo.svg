@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1320 192" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 192" role="img" aria-labelledby="title desc">
   <title id="title">CloudRevo</title>
   <desc id="desc">CloudRevo secure collaborative workspace logo</desc>
   <path d="M96 12 169 42v51c0 41-28 70-73 87-45-17-73-46-73-87V42l73-30Z" fill="#0e3a7d"/>
@@ -13,5 +13,5 @@
   <path d="M58 78h41l13 14h22c7 0 12 5 12 12v28c0 7-5 12-12 12H58c-7 0-12-5-12-12V90c0-7 5-12 12-12Z" fill="#0d55b7" opacity=".94"/>
   <path d="M59 92h40l13 14h21" fill="none" stroke="#79d7ff" stroke-linecap="round" stroke-linejoin="round" stroke-width="6"/>
   <path d="m77 122 10 9 22-24" fill="none" stroke="#dff7ff" stroke-linecap="round" stroke-linejoin="round" stroke-width="8"/>
-  <text x="210" y="168" fill="#10213f" font-family="ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif" font-size="220" font-weight="700" letter-spacing="-10">Cloud<tspan fill="#1677e8">Revo</tspan></text>
+  <text x="205" y="154" fill="#10213f" font-family="ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif" font-size="150" font-weight="700" letter-spacing="-7">Cloud<tspan fill="#1677e8">Revo</tspan></text>
 </svg>
