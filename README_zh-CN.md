@@ -13,7 +13,17 @@
 <p align="center">
   <a href="README.md">English</a> ·
   <a href="README_zh-CN.md">简体中文</a> ·
-  <a href="#interface-languages">其他界面语言</a>
+  <a href="README_zh-TW.md">繁體中文</a> ·
+  <a href="README_ja-JP.md">日本語</a> ·
+  <a href="README_ko-KR.md">한국어</a> ·
+  <a href="README_de-DE.md">Deutsch</a> ·
+  <a href="README_es-ES.md">Español</a> ·
+  <a href="README_fr-FR.md">Français</a> ·
+  <a href="README_it-IT.md">Italiano</a> ·
+  <a href="README_pl-PL.md">Polski</a> ·
+  <a href="README_pt-BR.md">Português (Brasil)</a> ·
+  <a href="README_ru-RU.md">Русский</a> ·
+  <a href="README_ar-AR.md">العربية</a>
 </p>
 
 <p align="center">
@@ -34,10 +44,6 @@
 - [ ] 桌面端同步
 - [ ] 部署与 API 文档
 - [ ] 更多集成测试
-
-## 界面语言
-
-前端已提供 [العربية](https://github.com/dadastory/CloudRevo_web/tree/main/public/locales/ar-AR)、[Deutsch](https://github.com/dadastory/CloudRevo_web/tree/main/public/locales/de-DE)、[Español](https://github.com/dadastory/CloudRevo_web/tree/main/public/locales/es-ES)、[Français](https://github.com/dadastory/CloudRevo_web/tree/main/public/locales/fr-FR)、[Italiano](https://github.com/dadastory/CloudRevo_web/tree/main/public/locales/it-IT)、[日本語](https://github.com/dadastory/CloudRevo_web/tree/main/public/locales/ja-JP)、[한국어](https://github.com/dadastory/CloudRevo_web/tree/main/public/locales/ko-KR)、[Polski](https://github.com/dadastory/CloudRevo_web/tree/main/public/locales/pl-PL)、[Português (Brasil)](https://github.com/dadastory/CloudRevo_web/tree/main/public/locales/pt-BR)、[Русский](https://github.com/dadastory/CloudRevo_web/tree/main/public/locales/ru-RU) 与 [繁體中文](https://github.com/dadastory/CloudRevo_web/tree/main/public/locales/zh-TW) 界面翻译；英文与简体中文 README 请使用上方导航。
 
 ## 本地启动
 
