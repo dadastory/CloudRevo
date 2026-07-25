@@ -115,6 +115,10 @@ jobs:
 
   merge-image:
     needs: build-image
+    # `validate-release` is deliberately skipped for push events. The build job
+    # handles that with `always()`, so the dependent manifest job must do the
+    # same; otherwise GitHub skips it before it can publish `latest`.
+    if: ${{ always() && needs.build-image.result == 'success' }}
     name: Merge ${{ matrix.image }} manifest
     runs-on: ubuntu-24.04
     timeout-minutes: 15
