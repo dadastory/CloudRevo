@@ -19,6 +19,10 @@ permissions:
   contents: write
   packages: write
 
+concurrency:
+  group: cloudrevo-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'push' }}
+
 jobs:
   publish-latest:
     if: github.event_name == 'push'
