@@ -1,11 +1,9 @@
 <p align="center">
-  <a href="https://github.com/dadastory/CloudRevo_web">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/dadastory/CloudRevo/main/docs/brand/logo_light.svg">
-      <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/dadastory/CloudRevo/main/docs/brand/logo.svg">
-      <img src="https://raw.githubusercontent.com/dadastory/CloudRevo/main/docs/brand/logo.svg" width="380" alt="CloudRevo">
-    </picture>
-  </a>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/brand/logo_light.svg">
+    <source media="(prefers-color-scheme: light)" srcset="docs/brand/logo.svg">
+    <img src="docs/brand/logo.svg" width="380" alt="CloudRevo">
+  </picture>
 </p>
 
 <p align="center">All you need is one cloud.</p>
