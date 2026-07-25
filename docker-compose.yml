@@ -1,10 +1,16 @@
 name: cloudrevo
 
+x-local-build-args: &local-build-args
+  APK_REPOSITORY: https://mirrors.tuna.tsinghua.edu.cn/alpine
+  NPM_REGISTRY: https://mirrors.cloud.tencent.com/npm
+  GO_PROXY: https://goproxy.cn|https://proxy.golang.org,direct
+
 services:
   test:
     build:
       context: .
       target: test
+      args: *local-build-args
     profiles:
       - test
 
@@ -12,11 +18,14 @@ services:
     build:
       context: .
       target: frontend-test
+      args: *local-build-args
     profiles:
       - test
 
   cloudrevo:
-    build: .
+    build:
+      context: .
+      args: *local-build-args
     container_name: cloudrevo-backend
     depends_on:
       postgresql:

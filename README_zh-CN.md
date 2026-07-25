@@ -8,7 +8,7 @@
   </a>
 </p>
 
-<p align="center">快速、自托管的文件存储，提供权限、分享与离线下载。</p>
+<p align="center">你所需要的一切，只需一个网盘。</p>
 
 <p align="center">
   <a href="README.md">English</a> ·

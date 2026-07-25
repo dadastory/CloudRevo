@@ -8,7 +8,7 @@
   </a>
 </p>
 
-<p align="center">Fast, self-hosted file storage with permissions, sharing, and offline downloads.</p>
+<p align="center">All you need is one cloud.</p>
 
 <p align="center">
   <a href="README.md">English</a> ·
