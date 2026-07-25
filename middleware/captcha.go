@@ -9,12 +9,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cloudreve/Cloudreve/v4/application/dependency"
-	"github.com/cloudreve/Cloudreve/v4/pkg/logging"
-	"github.com/cloudreve/Cloudreve/v4/pkg/recaptcha"
-	request2 "github.com/cloudreve/Cloudreve/v4/pkg/request"
-	"github.com/cloudreve/Cloudreve/v4/pkg/serializer"
-	"github.com/cloudreve/Cloudreve/v4/pkg/setting"
+	"github.com/dadastory/CloudRevo/application/dependency"
+	"github.com/dadastory/CloudRevo/pkg/logging"
+	"github.com/dadastory/CloudRevo/pkg/recaptcha"
+	request2 "github.com/dadastory/CloudRevo/pkg/request"
+	"github.com/dadastory/CloudRevo/pkg/serializer"
+	"github.com/dadastory/CloudRevo/pkg/setting"
 	"github.com/gin-gonic/gin"
 	"github.com/mojocn/base64Captcha"
 )

@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"entgo.io/ent/dialect/sql"
-	"github.com/cloudreve/Cloudreve/v4/ent/predicate"
+	"github.com/dadastory/CloudRevo/ent/predicate"
 )
 
 // ID filters vertices based on their ID field.

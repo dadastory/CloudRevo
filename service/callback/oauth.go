@@ -1,7 +1,7 @@
 package callback
 
 import (
-	"github.com/cloudreve/Cloudreve/v4/pkg/serializer"
+	"github.com/dadastory/CloudRevo/pkg/serializer"
 	"github.com/gin-gonic/gin"
 )
 

@@ -2,4 +2,4 @@
 
 package ent
 
-// The schema-stitching logic is generated in github.com/cloudreve/Cloudreve/v4/ent/runtime/runtime.go
+// The schema-stitching logic is generated in github.com/dadastory/CloudRevo/ent/runtime/runtime.go

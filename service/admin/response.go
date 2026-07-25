@@ -4,11 +4,11 @@ import (
 	"encoding/gob"
 	"time"
 
-	"github.com/cloudreve/Cloudreve/v4/ent"
-	"github.com/cloudreve/Cloudreve/v4/inventory"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/fs"
-	"github.com/cloudreve/Cloudreve/v4/pkg/queue"
-	"github.com/cloudreve/Cloudreve/v4/pkg/setting"
+	"github.com/dadastory/CloudRevo/ent"
+	"github.com/dadastory/CloudRevo/inventory"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/fs"
+	"github.com/dadastory/CloudRevo/pkg/queue"
+	"github.com/dadastory/CloudRevo/pkg/setting"
 )
 
 type ListShareResponse struct {
@@ -145,7 +145,6 @@ type MetricsSummary struct {
 
 type Version struct {
 	Version string `json:"version"`
-	Pro     bool   `json:"pro"`
 	Commit  string `json:"commit"`
 }
 

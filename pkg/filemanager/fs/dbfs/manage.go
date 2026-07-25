@@ -8,13 +8,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cloudreve/Cloudreve/v4/ent"
-	"github.com/cloudreve/Cloudreve/v4/ent/user"
-	"github.com/cloudreve/Cloudreve/v4/inventory"
-	"github.com/cloudreve/Cloudreve/v4/inventory/types"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/fs"
-	"github.com/cloudreve/Cloudreve/v4/pkg/hashid"
-	"github.com/cloudreve/Cloudreve/v4/pkg/serializer"
+	"github.com/dadastory/CloudRevo/ent"
+	"github.com/dadastory/CloudRevo/ent/user"
+	"github.com/dadastory/CloudRevo/inventory"
+	"github.com/dadastory/CloudRevo/inventory/types"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/fs"
+	"github.com/dadastory/CloudRevo/pkg/hashid"
+	"github.com/dadastory/CloudRevo/pkg/serializer"
 	"github.com/samber/lo"
 	"golang.org/x/tools/container/intsets"
 )
@@ -26,7 +26,7 @@ func (f *DBFS) Create(ctx context.Context, path *fs.URI, fileType types.FileType
 	}
 
 	// Get navigator
-	navigator, err := f.getNavigator(ctx, path, NavigatorCapabilityCreateFile, NavigatorCapabilityLockFile)
+	navigator, err := f.getNavigatorForSharedOperation(ctx, path, sharedOperationCreate)
 	if err != nil {
 		return nil, err
 	}
@@ -57,7 +57,8 @@ func (f *DBFS) Create(ctx context.Context, path *fs.URI, fileType types.FileType
 			WithError(fmt.Errorf("object with the same name but different type %q already exist", ancestor.Type()))
 	}
 
-	if _, ok := ctx.Value(ByPassOwnerCheckCtxKey{}).(bool); !ok && ancestor.Owner().ID != f.user.ID {
+	if _, ok := ctx.Value(ByPassOwnerCheckCtxKey{}).(bool); !ok &&
+		!f.canAccessWithNavigator(navigator, ancestor, NavigatorCapabilityCreateFile) {
 		return nil, fs.ErrOwnerOnly
 	}
 
@@ -149,7 +150,7 @@ func (f *DBFS) Create(ctx context.Context, path *fs.URI, fileType types.FileType
 
 func (f *DBFS) Rename(ctx context.Context, path *fs.URI, newName string) (fs.File, *fs.IndexDiff, error) {
 	// Get navigator
-	navigator, err := f.getNavigator(ctx, path, NavigatorCapabilityRenameFile, NavigatorCapabilityLockFile)
+	navigator, err := f.getNavigatorForSharedOperation(ctx, path, sharedOperationRename)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -162,7 +163,8 @@ func (f *DBFS) Rename(ctx context.Context, path *fs.URI, newName string) (fs.Fil
 	}
 	oldName := target.Name()
 
-	if _, ok := ctx.Value(ByPassOwnerCheckCtxKey{}).(bool); !ok && target.Owner().ID != f.user.ID {
+	if _, ok := ctx.Value(ByPassOwnerCheckCtxKey{}).(bool); !ok &&
+		!f.canAccessWithNavigator(navigator, target, NavigatorCapabilityRenameFile) {
 		return nil, nil, fs.ErrOwnerOnly
 	}
 
@@ -252,7 +254,7 @@ func (f *DBFS) SoftDelete(ctx context.Context, path ...*fs.URI) error {
 	targets := make([]*File, 0, len(path))
 	for _, p := range path {
 		// Get navigator
-		navigator, err := f.getNavigator(ctx, p, NavigatorCapabilitySoftDelete)
+		navigator, err := f.getNavigatorForSharedOperation(ctx, p, sharedOperationSoftDelete)
 		if err != nil {
 			ae.Add(p.String(), err)
 			continue
@@ -265,7 +267,8 @@ func (f *DBFS) SoftDelete(ctx context.Context, path ...*fs.URI) error {
 			continue
 		}
 
-		if _, ok := ctx.Value(ByPassOwnerCheckCtxKey{}).(bool); !ok && target.Owner().ID != f.user.ID {
+		if _, ok := ctx.Value(ByPassOwnerCheckCtxKey{}).(bool); !ok &&
+			!f.canAccessWithNavigator(navigator, target, NavigatorCapabilitySoftDelete) {
 			ae.Add(p.String(), fs.ErrOwnerOnly.WithError(fmt.Errorf("only file owner can delete file without trash bin")))
 			continue
 		}
@@ -346,7 +349,7 @@ func (f *DBFS) Delete(ctx context.Context, path []*fs.URI, opts ...fs.Option) ([
 
 	for _, p := range path {
 		// Get navigator
-		navigator, err := f.getNavigator(ctx, p, NavigatorCapabilityDeleteFile, NavigatorCapabilityLockFile)
+		navigator, err := f.getNavigatorForSharedOperation(ctx, p, sharedOperationDelete)
 		if err != nil {
 			ae.Add(p.String(), err)
 			continue
@@ -359,7 +362,8 @@ func (f *DBFS) Delete(ctx context.Context, path []*fs.URI, opts ...fs.Option) ([
 			continue
 		}
 
-		if _, ok := ctx.Value(ByPassOwnerCheckCtxKey{}).(bool); !o.SysSkipSoftDelete && !ok && target.Owner().ID != f.user.ID {
+		if _, ok := ctx.Value(ByPassOwnerCheckCtxKey{}).(bool); !o.SysSkipSoftDelete && !ok &&
+			!f.canAccessWithNavigator(navigator, target, NavigatorCapabilityDeleteFile) {
 			ae.Add(p.String(), fs.ErrOwnerOnly)
 			continue
 		}
@@ -414,7 +418,7 @@ func (f *DBFS) Delete(ctx context.Context, path []*fs.URI, opts ...fs.Option) ([
 
 func (f *DBFS) VersionControl(ctx context.Context, path *fs.URI, versionId int, delete bool) (*fs.IndexDiff, error) {
 	// Get navigator
-	navigator, err := f.getNavigator(ctx, path, NavigatorCapabilityVersionControl)
+	navigator, err := f.getNavigator(ctx, path, versionControlCapabilities(delete)...)
 	if err != nil {
 		return nil, err
 	}
@@ -429,7 +433,8 @@ func (f *DBFS) VersionControl(ctx context.Context, path *fs.URI, versionId int, 
 		return nil, fmt.Errorf("failed to get target file: %w", err)
 	}
 
-	if _, ok := ctx.Value(ByPassOwnerCheckCtxKey{}).(bool); !ok && target.Owner().ID != f.user.ID {
+	if _, ok := ctx.Value(ByPassOwnerCheckCtxKey{}).(bool); !ok && target.Owner().ID != f.user.ID &&
+		!isShareNavigatorWithCapability(navigator, target, NavigatorCapabilityVersionControl) {
 		return nil, fs.ErrOwnerOnly
 	}
 
@@ -476,6 +481,14 @@ func (f *DBFS) VersionControl(ctx context.Context, path *fs.URI, versionId int, 
 
 		return nil, nil
 	}
+}
+
+func versionControlCapabilities(delete bool) []NavigatorCapability {
+	capabilities := []NavigatorCapability{NavigatorCapabilityVersionControl}
+	if delete {
+		capabilities = append(capabilities, NavigatorCapabilityDeleteFile)
+	}
+	return capabilities
 }
 
 func (f *DBFS) Restore(ctx context.Context, path ...*fs.URI) error {
@@ -535,7 +548,7 @@ func (f *DBFS) Restore(ctx context.Context, path ...*fs.URI) error {
 
 func (f *DBFS) MoveOrCopy(ctx context.Context, path []*fs.URI, dst *fs.URI, isCopy bool) (*fs.IndexDiff, error) {
 	targets := make([]*File, 0, len(path))
-	dstNavigator, err := f.getNavigator(ctx, dst, NavigatorCapabilityLockFile)
+	dstNavigator, err := f.getNavigatorForSharedOperation(ctx, dst, sharedOperationCreate)
 	if err != nil {
 		return nil, err
 	}
@@ -546,7 +559,8 @@ func (f *DBFS) MoveOrCopy(ctx context.Context, path []*fs.URI, dst *fs.URI, isCo
 		return nil, fmt.Errorf("faield to get destination folder: %w", err)
 	}
 
-	if _, ok := ctx.Value(ByPassOwnerCheckCtxKey{}).(bool); !ok && destination.Owner().ID != f.user.ID {
+	if _, ok := ctx.Value(ByPassOwnerCheckCtxKey{}).(bool); !ok &&
+		!f.canAccessWithNavigator(dstNavigator, destination, NavigatorCapabilityCreateFile) {
 		return nil, fs.ErrOwnerOnly
 	}
 
@@ -563,7 +577,11 @@ func (f *DBFS) MoveOrCopy(ctx context.Context, path []*fs.URI, dst *fs.URI, isCo
 
 	for _, p := range path {
 		// Get navigator
-		navigator, err := f.getNavigator(ctx, p, NavigatorCapabilityLockFile)
+		sourceOperation := sharedOperationDelete
+		if isCopy {
+			sourceOperation = sharedOperationCopySource
+		}
+		navigator, err := f.getNavigatorForSharedOperation(ctx, p, sourceOperation)
 		if err != nil {
 			ae.Add(p.String(), err)
 			continue
@@ -582,7 +600,12 @@ func (f *DBFS) MoveOrCopy(ctx context.Context, path []*fs.URI, dst *fs.URI, isCo
 			continue
 		}
 
-		if _, ok := ctx.Value(ByPassOwnerCheckCtxKey{}).(bool); !ok && target.Owner().ID != f.user.ID {
+		sourceCapability := NavigatorCapabilityDeleteFile
+		if isCopy {
+			sourceCapability = NavigatorCapabilityDownloadFile
+		}
+		if _, ok := ctx.Value(ByPassOwnerCheckCtxKey{}).(bool); !ok &&
+			!f.canAccessWithNavigator(navigator, target, sourceCapability) {
 			ae.Add(p.String(), fs.ErrOwnerOnly)
 			continue
 		}

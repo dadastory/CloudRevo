@@ -7,15 +7,15 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/cloudreve/Cloudreve/v4/ent"
-	"github.com/cloudreve/Cloudreve/v4/inventory/types"
-	"github.com/cloudreve/Cloudreve/v4/pkg/cluster/routes"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/driver"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/fs"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/fs/dbfs"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/manager/entitysource"
-	"github.com/cloudreve/Cloudreve/v4/pkg/hashid"
-	"github.com/cloudreve/Cloudreve/v4/pkg/serializer"
+	"github.com/dadastory/CloudRevo/ent"
+	"github.com/dadastory/CloudRevo/inventory/types"
+	"github.com/dadastory/CloudRevo/pkg/cluster/routes"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/driver"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/fs"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/fs/dbfs"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/manager/entitysource"
+	"github.com/dadastory/CloudRevo/pkg/hashid"
+	"github.com/dadastory/CloudRevo/pkg/serializer"
 	"github.com/gofrs/uuid"
 )
 
@@ -43,7 +43,7 @@ type (
 		RecycleEntities(ctx context.Context, force bool, entityIDs ...int) error
 		// ListPhysical lists physical files in a path
 		ListPhysical(ctx context.Context, path string, policyID int, recursive bool, progress driver.ListProgressFunc) ([]fs.PhysicalObject, error)
-		// ImportPhysical imports a physical file to a Cloudreve file
+		// ImportPhysical imports a physical file to a CloudRevo file
 		ImportPhysical(ctx context.Context, dst *fs.URI, policyId int, src fs.PhysicalObject, completeHook bool) error
 	}
 	DirectLink struct {

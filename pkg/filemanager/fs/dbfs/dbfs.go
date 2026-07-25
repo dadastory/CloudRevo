@@ -9,20 +9,20 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cloudreve/Cloudreve/v4/application/constants"
-	"github.com/cloudreve/Cloudreve/v4/ent"
-	"github.com/cloudreve/Cloudreve/v4/inventory"
-	"github.com/cloudreve/Cloudreve/v4/inventory/types"
-	"github.com/cloudreve/Cloudreve/v4/pkg/cache"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/encrypt"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/eventhub"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/fs"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/lock"
-	"github.com/cloudreve/Cloudreve/v4/pkg/hashid"
-	"github.com/cloudreve/Cloudreve/v4/pkg/logging"
-	"github.com/cloudreve/Cloudreve/v4/pkg/serializer"
-	"github.com/cloudreve/Cloudreve/v4/pkg/setting"
-	"github.com/cloudreve/Cloudreve/v4/pkg/util"
+	"github.com/dadastory/CloudRevo/application/constants"
+	"github.com/dadastory/CloudRevo/ent"
+	"github.com/dadastory/CloudRevo/inventory"
+	"github.com/dadastory/CloudRevo/inventory/types"
+	"github.com/dadastory/CloudRevo/pkg/cache"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/encrypt"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/eventhub"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/fs"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/lock"
+	"github.com/dadastory/CloudRevo/pkg/hashid"
+	"github.com/dadastory/CloudRevo/pkg/logging"
+	"github.com/dadastory/CloudRevo/pkg/serializer"
+	"github.com/dadastory/CloudRevo/pkg/setting"
+	"github.com/dadastory/CloudRevo/pkg/util"
 	"github.com/gofrs/uuid"
 	"github.com/samber/lo"
 	"golang.org/x/tools/container/intsets"
@@ -546,8 +546,12 @@ func (f *DBFS) Walk(ctx context.Context, path *fs.URI, depth int, walk fs.WalkFu
 		return err
 	}
 
-	// Require Read permission
-	if _, ok := ctx.Value(ByPassOwnerCheckCtxKey{}).(bool); !ok && target.OwnerID() != f.user.ID {
+	// Walking is normally owner-only. A shared tree may also be walked for a
+	// download/archive operation, but every yielded descendant is filtered by
+	// the active share navigator below.
+	sharedNavigator, isSharedNavigator := navigator.(*shareNavigator)
+	if _, ok := ctx.Value(ByPassOwnerCheckCtxKey{}).(bool); !ok && target.OwnerID() != f.user.ID &&
+		(!isSharedNavigator || !sharedNavigator.allows(target, NavigatorCapabilityDownloadFile)) {
 		return fs.ErrOwnerOnly
 	}
 
@@ -559,6 +563,9 @@ func (f *DBFS) Walk(ctx context.Context, path *fs.URI, depth int, walk fs.WalkFu
 
 	if err := navigator.Walk(ctx, []*File{target}, limit, depth, func(files []*File, l int) error {
 		for _, file := range files {
+			if isSharedNavigator && !sharedNavigator.allows(file, NavigatorCapabilityDownloadFile) {
+				continue
+			}
 			if err := walk(file, l); err != nil {
 				return err
 			}
@@ -736,7 +743,7 @@ func (f *DBFS) getNavigator(ctx context.Context, path *fs.URI, requiredCapabilit
 		case constants.FileSystemTrash:
 			n = NewTrashNavigator(f.user, f.fileClient, f.l, config, f.hasher)
 		case constants.FileSystemSharedWithMe:
-			n = NewSharedWithMeNavigator(f.user, f.fileClient, f.l, config, f.hasher)
+			n = NewSharedWithMeNavigator(f.user, f.fileClient, f.l, config, f.hasher, f.shareClient)
 		default:
 			return nil, fmt.Errorf("unknown file system %q", pathFs)
 		}
@@ -760,15 +767,77 @@ func (f *DBFS) getNavigator(ctx context.Context, path *fs.URI, requiredCapabilit
 		res = n
 	}
 
-	// Check fs capabilities
-	capabilities := res.Capabilities(false).Capability
-	for _, capability := range requiredCapabilities {
-		if !capabilities.Enabled(int(capability)) {
-			return nil, fs.ErrNotSupportedAction.WithError(fmt.Errorf("action %q is not supported under current fs", capability))
+	// Share capabilities vary by the effective rule for the requested path;
+	// they cannot be checked against the navigator's root capability alone.
+	if shareNavigator, ok := res.(*shareNavigator); ok {
+		if err := shareNavigator.ensureAccess(ctx, path, requiredCapabilities...); err != nil {
+			return nil, err
+		}
+	} else {
+		capabilities := res.Capabilities(false).Capability
+		for _, capability := range requiredCapabilities {
+			if !capabilities.Enabled(int(capability)) {
+				return nil, fs.ErrNotSupportedAction.WithError(fmt.Errorf("action %q is not supported under current fs", capability))
+			}
 		}
 	}
 
 	return res, nil
+}
+
+// sharedOperation describes a user-visible action. It deliberately excludes
+// storage coordination such as locks: a share visitor is authorized by the
+// effective Casbin action, while the DBFS implementation acquires locks only
+// after that authorization succeeds.
+type sharedOperation uint8
+
+const (
+	sharedOperationCreate sharedOperation = iota
+	sharedOperationUploadNew
+	sharedOperationUploadReplace
+	sharedOperationRename
+	sharedOperationMetadata
+	sharedOperationProps
+	sharedOperationDelete
+	sharedOperationSoftDelete
+	sharedOperationCopySource
+)
+
+func sharedOperationCapabilities(operation sharedOperation) []NavigatorCapability {
+	switch operation {
+	case sharedOperationCreate:
+		return []NavigatorCapability{NavigatorCapabilityCreateFile}
+	case sharedOperationUploadNew:
+		return []NavigatorCapability{NavigatorCapabilityUploadFile}
+	case sharedOperationUploadReplace:
+		return []NavigatorCapability{NavigatorCapabilityVersionControl}
+	case sharedOperationRename:
+		return []NavigatorCapability{NavigatorCapabilityRenameFile}
+	case sharedOperationMetadata:
+		return []NavigatorCapability{NavigatorCapabilityUpdateMetadata}
+	case sharedOperationProps:
+		return []NavigatorCapability{NavigatorCapabilityModifyProps}
+	case sharedOperationDelete:
+		return []NavigatorCapability{NavigatorCapabilityDeleteFile}
+	case sharedOperationSoftDelete:
+		return []NavigatorCapability{NavigatorCapabilitySoftDelete}
+	case sharedOperationCopySource:
+		return []NavigatorCapability{NavigatorCapabilityDownloadFile}
+	default:
+		return nil
+	}
+}
+
+func (f *DBFS) getNavigatorForSharedOperation(ctx context.Context, path *fs.URI, operation sharedOperation) (Navigator, error) {
+	return f.getNavigator(ctx, path, sharedOperationCapabilities(operation)...)
+}
+
+func (f *DBFS) canAccessWithNavigator(navigator Navigator, target *File, capability NavigatorCapability) bool {
+	if target.OwnerID() == f.user.ID {
+		return true
+	}
+
+	return isShareNavigatorWithCapability(navigator, target, capability)
 }
 
 func (f *DBFS) navigatorId(path *fs.URI) string {
@@ -803,6 +872,15 @@ func generateSavePath(policy *ent.StoragePolicy, req *fs.UploadRequest, user *en
 }
 
 func canMoveOrCopyTo(src, dst *fs.URI, isCopy bool) bool {
+	if src.FileSystem() == constants.FileSystemShare || dst.FileSystem() == constants.FileSystemShare {
+		// A shared visitor may only transfer objects inside the active share. The
+		// per-source and per-destination ACL checks are performed by MoveOrCopy;
+		// this guard prevents a share link from becoming a bridge to another FS.
+		return src.FileSystem() == constants.FileSystemShare &&
+			dst.FileSystem() == constants.FileSystemShare &&
+			src.ID("") == dst.ID("")
+	}
+
 	if isCopy {
 		return src.FileSystem() == dst.FileSystem() && src.FileSystem() == constants.FileSystemMy
 	} else {

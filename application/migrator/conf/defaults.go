@@ -12,7 +12,7 @@ var RedisConfig = &redis{
 var DatabaseConfig = &database{
 	Type:       "UNSET",
 	Charset:    "utf8",
-	DBFile:     "cloudreve.db",
+	DBFile:     "cloudrevo.db",
 	Port:       3306,
 	UnixSocket: false,
 }

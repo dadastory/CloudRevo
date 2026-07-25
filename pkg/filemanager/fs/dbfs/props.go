@@ -5,15 +5,16 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/cloudreve/Cloudreve/v4/inventory"
-	"github.com/cloudreve/Cloudreve/v4/inventory/types"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/fs"
-	"github.com/cloudreve/Cloudreve/v4/pkg/serializer"
+	"github.com/dadastory/CloudRevo/inventory"
+	"github.com/dadastory/CloudRevo/inventory/types"
+	"github.com/dadastory/CloudRevo/pkg/defaultshare"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/fs"
+	"github.com/dadastory/CloudRevo/pkg/serializer"
 	"github.com/samber/lo"
 )
 
 func (f *DBFS) PatchProps(ctx context.Context, uri *fs.URI, props *types.FileProps, delete bool) error {
-	navigator, err := f.getNavigator(ctx, uri, NavigatorCapabilityModifyProps, NavigatorCapabilityLockFile)
+	navigator, err := f.getNavigatorForSharedOperation(ctx, uri, sharedOperationProps)
 	if err != nil {
 		return err
 	}
@@ -23,7 +24,8 @@ func (f *DBFS) PatchProps(ctx context.Context, uri *fs.URI, props *types.FilePro
 		return fmt.Errorf("failed to get target file: %w", err)
 	}
 
-	if target.OwnerID() != f.user.ID && !f.user.Edges.Group.Permissions.Enabled(int(types.GroupPermissionIsAdmin)) {
+	if target.OwnerID() != f.user.ID && !f.user.Edges.Group.Permissions.Enabled(int(types.GroupPermissionIsAdmin)) &&
+		!f.canAccessWithNavigator(navigator, target, NavigatorCapabilityModifyProps) {
 		return fs.ErrOwnerOnly.WithError(fmt.Errorf("only file owner can modify file props"))
 	}
 
@@ -47,9 +49,48 @@ func (f *DBFS) PatchProps(ctx context.Context, uri *fs.URI, props *types.FilePro
 			currentProps.View = props.View
 		}
 	}
+	if _, err := f.fileClient.UpdateProps(ctx, target.Model, currentProps); err != nil {
+		return serializer.NewError(serializer.CodeDBError, "failed to update file props", err)
+	}
+	return nil
+}
+
+// PatchShareAccessRule updates a file-level share permission override. It is
+// intentionally separate from PatchProps because the latter's delete argument
+// applies only to the view setting.
+func (f *DBFS) PatchShareAccessRule(ctx context.Context, uri *fs.URI, rule *types.ShareAccessRule) error {
+	navigator, err := f.getNavigatorForSharedOperation(ctx, uri, sharedOperationProps)
+	if err != nil {
+		return err
+	}
+
+	target, err := f.getFileByPath(ctx, navigator, uri)
+	if err != nil {
+		return fmt.Errorf("failed to get target file: %w", err)
+	}
+
+	if target.OwnerID() != f.user.ID && !f.user.Edges.Group.Permissions.Enabled(int(types.GroupPermissionIsAdmin)) {
+		return fs.ErrOwnerOnly.WithError(fmt.Errorf("only file owner can modify share access rules"))
+	}
+
+	lr := &LockByPath{target.Uri(true), target, target.Type(), ""}
+	ls, err := f.acquireByPath(ctx, -1, f.user, true, fs.LockApp(fs.ApplicationUpdateMetadata), lr)
+	defer func() { _ = f.Release(ctx, ls) }()
+	if err != nil {
+		return err
+	}
+
+	currentProps := target.Model.Props
+	if currentProps == nil {
+		currentProps = &types.FileProps{}
+	}
+	currentProps.ShareAccessRule = rule
 
 	if _, err := f.fileClient.UpdateProps(ctx, target.Model, currentProps); err != nil {
 		return serializer.NewError(serializer.CodeDBError, "failed to update file props", err)
+	}
+	if err := defaultshare.RestartForFile(ctx, f.shareClient, f.cache, target.ID()); err != nil {
+		return serializer.NewError(serializer.CodeCacheOperation, "failed to restart default-share reconciliation", err)
 	}
 
 	return nil
@@ -59,7 +100,7 @@ func (f *DBFS) PatchMetadata(ctx context.Context, path []*fs.URI, metas ...fs.Me
 	ae := serializer.NewAggregateError()
 	targets := make([]*File, 0, len(path))
 	for _, p := range path {
-		navigator, err := f.getNavigator(ctx, p, NavigatorCapabilityUpdateMetadata, NavigatorCapabilityLockFile)
+		navigator, err := f.getNavigatorForSharedOperation(ctx, p, sharedOperationMetadata)
 		if err != nil {
 			ae.Add(p.String(), err)
 			continue
@@ -72,7 +113,8 @@ func (f *DBFS) PatchMetadata(ctx context.Context, path []*fs.URI, metas ...fs.Me
 		}
 
 		// Require Update permission
-		if _, ok := ctx.Value(ByPassOwnerCheckCtxKey{}).(bool); !ok && target.OwnerID() != f.user.ID {
+		if _, ok := ctx.Value(ByPassOwnerCheckCtxKey{}).(bool); !ok &&
+			!f.canAccessWithNavigator(navigator, target, NavigatorCapabilityUpdateMetadata) {
 			return fs.ErrOwnerOnly.WithError(fmt.Errorf("permission denied"))
 		}
 
@@ -147,4 +189,9 @@ func (f *DBFS) PatchMetadata(ctx context.Context, path []*fs.URI, metas ...fs.Me
 	}
 
 	return ae.Aggregate()
+}
+
+func isShareNavigatorWithCapability(navigator Navigator, target *File, capability NavigatorCapability) bool {
+	shareNavigator, ok := navigator.(*shareNavigator)
+	return ok && shareNavigator.allows(target, capability)
 }

@@ -3,13 +3,13 @@ package middleware
 import (
 	"sync"
 
-	"github.com/cloudreve/Cloudreve/v4/application/dependency"
-	"github.com/cloudreve/Cloudreve/v4/inventory/types"
-	"github.com/cloudreve/Cloudreve/v4/pkg/cluster"
-	"github.com/cloudreve/Cloudreve/v4/pkg/downloader"
-	"github.com/cloudreve/Cloudreve/v4/pkg/request"
-	"github.com/cloudreve/Cloudreve/v4/pkg/serializer"
-	"github.com/cloudreve/Cloudreve/v4/routers/controllers"
+	"github.com/dadastory/CloudRevo/application/dependency"
+	"github.com/dadastory/CloudRevo/inventory/types"
+	"github.com/dadastory/CloudRevo/pkg/cluster"
+	"github.com/dadastory/CloudRevo/pkg/downloader"
+	"github.com/dadastory/CloudRevo/pkg/request"
+	"github.com/dadastory/CloudRevo/pkg/serializer"
+	"github.com/dadastory/CloudRevo/routers/controllers"
 	"github.com/gin-gonic/gin"
 )
 

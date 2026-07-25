@@ -28,14 +28,14 @@ type (
 
 	// GroupSetting 用户组其他配置
 	GroupSetting struct {
-		CompressSize          int64                  `json:"compress_size,omitempty"` // 可压缩大小
-		DecompressSize        int64                  `json:"decompress_size,omitempty"`
-		RemoteDownloadOptions map[string]interface{} `json:"remote_download_options,omitempty"` // 离线下载用户组配置
-		SourceBatchSize       int                    `json:"source_batch,omitempty"`
-		Aria2BatchSize        int                    `json:"aria2_batch,omitempty"`
-		MaxWalkedFiles        int                    `json:"max_walked_files,omitempty"`
-		TrashRetention        int                    `json:"trash_retention,omitempty"`
-		RedirectedSource      bool                   `json:"redirected_source,omitempty"`
+		CompressSize            int64                  `json:"compress_size,omitempty"` // 可压缩大小
+		DecompressSize          int64                  `json:"decompress_size,omitempty"`
+		RemoteDownloadOptions   map[string]interface{} `json:"remote_download_options,omitempty"` // 离线下载用户组配置
+		SourceBatchSize         int                    `json:"source_batch,omitempty"`
+		RemoteDownloadBatchSize int                    `json:"remote_download_batch,omitempty"`
+		MaxWalkedFiles          int                    `json:"max_walked_files,omitempty"`
+		TrashRetention          int                    `json:"trash_retention,omitempty"`
+		RedirectedSource        bool                   `json:"redirected_source,omitempty"`
 	}
 
 	// PolicySetting 非公有的存储策略属性
@@ -56,7 +56,7 @@ type (
 		CustomProxy bool `json:"custom_proxy,omitempty"`
 		// ProxyServer 反代地址
 		ProxyServer string `json:"proxy_server,omitempty"`
-		// InternalProxy whether to use Cloudreve internal proxy to get file content
+		// InternalProxy whether to use CloudRevo internal proxy to get file content
 		InternalProxy bool `json:"internal_proxy,omitempty"`
 		// OdDriver OneDrive 驱动器定位符
 		OdDriver string `json:"od_driver,omitempty"`
@@ -117,7 +117,7 @@ type (
 	NodeSetting struct {
 		Provider            DownloaderProvider `json:"provider,omitempty"`
 		*QBittorrentSetting `json:"qbittorrent,omitempty"`
-		*Aria2Setting       `json:"aria2,omitempty"`
+		*GopeedSetting      `json:"gopeed,omitempty"`
 		// 下载监控间隔
 		Interval       int  `json:"interval,omitempty"`
 		WaitForSeeding bool `json:"wait_for_seeding,omitempty"`
@@ -153,11 +153,12 @@ type (
 		TempPath string         `json:"temp_path,omitempty"`
 	}
 
-	Aria2Setting struct {
-		Server   string         `json:"server,omitempty"`
-		Token    string         `json:"token,omitempty"`
-		Options  map[string]any `json:"options,omitempty"`
-		TempPath string         `json:"temp_path,omitempty"`
+	GopeedSetting struct {
+		Server       string         `json:"server,omitempty"`
+		Token        string         `json:"token,omitempty"`
+		Options      map[string]any `json:"options,omitempty"`
+		DownloadPath string         `json:"download_path,omitempty"`
+		TempPath     string         `json:"temp_path,omitempty"`
 	}
 
 	TaskPublicState struct {
@@ -196,7 +197,8 @@ type (
 	PolicyType string
 
 	FileProps struct {
-		View *ExplorerView `json:"view,omitempty"`
+		View            *ExplorerView    `json:"view,omitempty"`
+		ShareAccessRule *ShareAccessRule `json:"share_access_rule,omitempty"`
 	}
 
 	ExplorerView struct {
@@ -225,6 +227,26 @@ type (
 		ShareView bool `json:"share_view,omitempty"`
 		// Whether to automatically show readme file in share view
 		ShowReadMe bool `json:"show_read_me,omitempty"`
+		// Default makes this share available to users created after it is enabled.
+		Default bool `json:"default,omitempty"`
+	}
+
+	// SharePermission grants safe operations through a share link.
+	SharePermission struct {
+		Read   bool `json:"read,omitempty"`
+		Update bool `json:"update,omitempty"`
+		Create bool `json:"create,omitempty"`
+		Delete bool `json:"delete,omitempty"`
+	}
+
+	// ShareAccessRule contains the permissions granted to each share audience.
+	// A present direct user entry takes precedence over a group entry. Groups are
+	// evaluated before the broad authenticated audience.
+	ShareAccessRule struct {
+		Anonymous     SharePermission         `json:"anonymous,omitempty"`
+		Authenticated SharePermission         `json:"authenticated,omitempty"`
+		Users         map[int]SharePermission `json:"users,omitempty"`
+		Groups        map[int]SharePermission `json:"groups,omitempty"`
 	}
 
 	OAuthClientProps struct {
@@ -312,8 +334,8 @@ const (
 )
 
 const (
-	DownloaderProviderAria2       = DownloaderProvider("aria2")
 	DownloaderProviderQBittorrent = DownloaderProvider("qbittorrent")
+	DownloaderProviderGopeed      = DownloaderProvider("gopeed")
 )
 
 type (

@@ -11,19 +11,19 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cloudreve/Cloudreve/v4/application/constants"
-	"github.com/cloudreve/Cloudreve/v4/ent"
-	"github.com/cloudreve/Cloudreve/v4/pkg/auth"
-	"github.com/cloudreve/Cloudreve/v4/pkg/cluster/routes"
-	"github.com/cloudreve/Cloudreve/v4/pkg/conf"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/chunk"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/chunk/backoff"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/driver"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/fs"
-	"github.com/cloudreve/Cloudreve/v4/pkg/logging"
-	"github.com/cloudreve/Cloudreve/v4/pkg/request"
-	"github.com/cloudreve/Cloudreve/v4/pkg/serializer"
-	"github.com/cloudreve/Cloudreve/v4/pkg/setting"
+	"github.com/dadastory/CloudRevo/application/constants"
+	"github.com/dadastory/CloudRevo/ent"
+	"github.com/dadastory/CloudRevo/pkg/auth"
+	"github.com/dadastory/CloudRevo/pkg/cluster/routes"
+	"github.com/dadastory/CloudRevo/pkg/conf"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/chunk"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/chunk/backoff"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/driver"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/fs"
+	"github.com/dadastory/CloudRevo/pkg/logging"
+	"github.com/dadastory/CloudRevo/pkg/request"
+	"github.com/dadastory/CloudRevo/pkg/serializer"
+	"github.com/dadastory/CloudRevo/pkg/setting"
 	"github.com/gofrs/uuid"
 )
 
@@ -177,7 +177,7 @@ func (c *remoteClient) DeleteFiles(ctx context.Context, files ...string) ([]stri
 		if resp.Code == serializer.CodeNotFullySuccess {
 			resp.GobDecode(&failed)
 		}
-		return failed, fmt.Errorf(resp.Error)
+		return failed, fmt.Errorf("%s", resp.Error)
 	}
 
 	return nil, nil
@@ -196,7 +196,7 @@ func (c *remoteClient) MediaMeta(ctx context.Context, src, ext, language string)
 	}
 
 	if resp.Code != 0 {
-		return nil, fmt.Errorf(resp.Error)
+		return nil, fmt.Errorf("%s", resp.Error)
 	}
 
 	var metas []driver.MediaMeta

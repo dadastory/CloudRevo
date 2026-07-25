@@ -9,24 +9,25 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/cloudreve/Cloudreve/v4/ent"
-	"github.com/cloudreve/Cloudreve/v4/ent/task"
-	"github.com/cloudreve/Cloudreve/v4/inventory/types"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/driver/local"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/fs"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/fs/dbfs"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/manager/entitysource"
-	"github.com/cloudreve/Cloudreve/v4/pkg/logging"
-	"github.com/cloudreve/Cloudreve/v4/pkg/queue"
-	"github.com/cloudreve/Cloudreve/v4/pkg/thumb"
-	"github.com/cloudreve/Cloudreve/v4/pkg/util"
+	"github.com/dadastory/CloudRevo/ent"
+	"github.com/dadastory/CloudRevo/ent/task"
+	"github.com/dadastory/CloudRevo/inventory/types"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/driver/local"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/fs"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/fs/dbfs"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/manager/entitysource"
+	"github.com/dadastory/CloudRevo/pkg/logging"
+	"github.com/dadastory/CloudRevo/pkg/queue"
+	"github.com/dadastory/CloudRevo/pkg/thumb"
+	"github.com/dadastory/CloudRevo/pkg/util"
 	"github.com/samber/lo"
 )
 
 // Thumbnail returns the thumbnail entity of the file.
 func (m *manager) Thumbnail(ctx context.Context, uri *fs.URI) (entitysource.EntitySource, error) {
 	// retrieve file info
-	file, err := m.fs.Get(ctx, uri, dbfs.WithFileEntities(), dbfs.WithFilePublicMetadata())
+	file, err := m.fs.Get(ctx, uri, dbfs.WithFileEntities(), dbfs.WithFilePublicMetadata(),
+		dbfs.WithRequiredCapabilities(dbfs.NavigatorCapabilityDownloadFile))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get file: %w", err)
 	}

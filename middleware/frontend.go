@@ -1,8 +1,8 @@
 package middleware
 
 import (
-	"github.com/cloudreve/Cloudreve/v4/application/dependency"
-	"github.com/cloudreve/Cloudreve/v4/pkg/util"
+	"github.com/dadastory/CloudRevo/application/dependency"
+	"github.com/dadastory/CloudRevo/pkg/util"
 	"github.com/gin-gonic/gin"
 	"io"
 	"net/http"

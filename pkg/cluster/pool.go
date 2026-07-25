@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/cloudreve/Cloudreve/v4/ent"
-	"github.com/cloudreve/Cloudreve/v4/ent/node"
-	"github.com/cloudreve/Cloudreve/v4/inventory"
-	"github.com/cloudreve/Cloudreve/v4/inventory/types"
-	"github.com/cloudreve/Cloudreve/v4/pkg/conf"
-	"github.com/cloudreve/Cloudreve/v4/pkg/logging"
-	"github.com/cloudreve/Cloudreve/v4/pkg/setting"
+	"github.com/dadastory/CloudRevo/ent"
+	"github.com/dadastory/CloudRevo/ent/node"
+	"github.com/dadastory/CloudRevo/inventory"
+	"github.com/dadastory/CloudRevo/inventory/types"
+	"github.com/dadastory/CloudRevo/pkg/conf"
+	"github.com/dadastory/CloudRevo/pkg/logging"
+	"github.com/dadastory/CloudRevo/pkg/setting"
 	"github.com/samber/lo"
 )
 

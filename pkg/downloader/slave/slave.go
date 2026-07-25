@@ -7,12 +7,12 @@ import (
 	"fmt"
 
 	"github.com/cloudflare/cfssl/scan/crypto/sha1"
-	"github.com/cloudreve/Cloudreve/v4/application/constants"
-	"github.com/cloudreve/Cloudreve/v4/inventory/types"
-	"github.com/cloudreve/Cloudreve/v4/pkg/downloader"
-	"github.com/cloudreve/Cloudreve/v4/pkg/logging"
-	"github.com/cloudreve/Cloudreve/v4/pkg/request"
-	"github.com/cloudreve/Cloudreve/v4/pkg/serializer"
+	"github.com/dadastory/CloudRevo/application/constants"
+	"github.com/dadastory/CloudRevo/inventory/types"
+	"github.com/dadastory/CloudRevo/pkg/downloader"
+	"github.com/dadastory/CloudRevo/pkg/logging"
+	"github.com/dadastory/CloudRevo/pkg/request"
+	"github.com/dadastory/CloudRevo/pkg/serializer"
 )
 
 type slaveDownloader struct {

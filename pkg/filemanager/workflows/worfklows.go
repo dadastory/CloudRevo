@@ -7,11 +7,11 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/cloudreve/Cloudreve/v4/application/dependency"
-	"github.com/cloudreve/Cloudreve/v4/inventory/types"
-	"github.com/cloudreve/Cloudreve/v4/pkg/cluster"
-	"github.com/cloudreve/Cloudreve/v4/pkg/queue"
-	"github.com/cloudreve/Cloudreve/v4/pkg/util"
+	"github.com/dadastory/CloudRevo/application/dependency"
+	"github.com/dadastory/CloudRevo/inventory/types"
+	"github.com/dadastory/CloudRevo/pkg/cluster"
+	"github.com/dadastory/CloudRevo/pkg/queue"
+	"github.com/dadastory/CloudRevo/pkg/util"
 )
 
 const (
@@ -39,6 +39,12 @@ func allocateNode(ctx context.Context, dep dependency.Dep, state *NodeState, cap
 
 	state.NodeID = node.ID()
 	return node, nil
+}
+
+// AllocateNode exposes the standard workflow node allocator to request-time
+// preflight checks without duplicating policy selection logic.
+func AllocateNode(ctx context.Context, dep dependency.Dep, state *NodeState, capability types.NodeCapability) (cluster.Node, error) {
+	return allocateNode(ctx, dep, state, capability)
 }
 
 // prepareSlaveTaskCtx prepares the context for the slave task.

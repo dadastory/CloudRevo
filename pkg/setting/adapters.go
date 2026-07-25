@@ -5,10 +5,10 @@ import (
 	"os"
 	"strings"
 
-	"github.com/cloudreve/Cloudreve/v4/inventory"
-	"github.com/cloudreve/Cloudreve/v4/pkg/cache"
-	"github.com/cloudreve/Cloudreve/v4/pkg/conf"
-	"github.com/cloudreve/Cloudreve/v4/pkg/logging"
+	"github.com/dadastory/CloudRevo/inventory"
+	"github.com/dadastory/CloudRevo/pkg/cache"
+	"github.com/dadastory/CloudRevo/pkg/conf"
+	"github.com/dadastory/CloudRevo/pkg/logging"
 	"github.com/samber/lo"
 )
 

@@ -6,7 +6,7 @@ import (
 	"path"
 	"strings"
 
-	"github.com/cloudreve/Cloudreve/v4/ent"
+	"github.com/dadastory/CloudRevo/ent"
 )
 
 func ApplyProxyIfNeeded(policy *ent.StoragePolicy, srcUrl *url.URL) (*url.URL, error) {

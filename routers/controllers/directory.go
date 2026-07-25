@@ -2,8 +2,8 @@ package controllers
 
 import (
 	"errors"
-	"github.com/cloudreve/Cloudreve/v4/pkg/serializer"
-	"github.com/cloudreve/Cloudreve/v4/service/explorer"
+	"github.com/dadastory/CloudRevo/pkg/serializer"
+	"github.com/dadastory/CloudRevo/service/explorer"
 	"github.com/gin-gonic/gin"
 )
 

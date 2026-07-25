@@ -1,14 +1,14 @@
 package controllers
 
 import (
-	"github.com/cloudreve/Cloudreve/v4/application/dependency"
-	"github.com/cloudreve/Cloudreve/v4/ent"
-	"github.com/cloudreve/Cloudreve/v4/inventory"
-	"github.com/cloudreve/Cloudreve/v4/pkg/hashid"
-	"github.com/cloudreve/Cloudreve/v4/pkg/serializer"
-	"github.com/cloudreve/Cloudreve/v4/pkg/util"
-	"github.com/cloudreve/Cloudreve/v4/service/share"
-	"github.com/cloudreve/Cloudreve/v4/service/user"
+	"github.com/dadastory/CloudRevo/application/dependency"
+	"github.com/dadastory/CloudRevo/ent"
+	"github.com/dadastory/CloudRevo/inventory"
+	"github.com/dadastory/CloudRevo/pkg/hashid"
+	"github.com/dadastory/CloudRevo/pkg/serializer"
+	"github.com/dadastory/CloudRevo/pkg/util"
+	"github.com/dadastory/CloudRevo/service/share"
+	"github.com/dadastory/CloudRevo/service/user"
 	"github.com/gin-gonic/gin"
 	"github.com/samber/lo"
 )
@@ -369,6 +369,42 @@ func UserSearch(c *gin.Context) {
 	c.JSON(200, serializer.Response{
 		Data: lo.Map(u, func(item *ent.User, index int) user.User {
 			return user.BuildUserRedacted(c, item, user.RedactLevelUser, hasher)
+		}),
+	})
+}
+
+// UserSearchGroups returns bounded selectable groups for share access rules.
+func UserSearchGroups(c *gin.Context) {
+	service := ParametersFromContext[*user.SearchShareGroupService](c, user.SearchShareGroupParamCtx{})
+	groups, err := service.Search(c)
+	if err != nil {
+		c.JSON(200, serializer.Err(c, err))
+		c.Abort()
+		return
+	}
+
+	hasher := dependency.FromContext(c).HashIDEncoder()
+	c.JSON(200, serializer.Response{
+		Data: lo.Map(groups, func(group *ent.Group, _ int) *user.Group {
+			return user.RedactedGroup(user.BuildGroup(group, hasher))
+		}),
+	})
+}
+
+// UserResolveGroups returns selected groups for persisted share access rules.
+func UserResolveGroups(c *gin.Context) {
+	service := ParametersFromContext[*user.ResolveShareGroupsService](c, user.ResolveShareGroupsParamCtx{})
+	groups, err := service.Resolve(c)
+	if err != nil {
+		c.JSON(200, serializer.Err(c, err))
+		c.Abort()
+		return
+	}
+
+	hasher := dependency.FromContext(c).HashIDEncoder()
+	c.JSON(200, serializer.Response{
+		Data: lo.Map(groups, func(group *ent.Group, _ int) *user.Group {
+			return user.RedactedGroup(user.BuildGroup(group, hasher))
 		}),
 	})
 }

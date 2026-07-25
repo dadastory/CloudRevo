@@ -8,19 +8,20 @@ import (
 	"strings"
 
 	"github.com/Masterminds/semver/v3"
-	"github.com/cloudreve/Cloudreve/v4/application/constants"
-	"github.com/cloudreve/Cloudreve/v4/ent"
-	"github.com/cloudreve/Cloudreve/v4/ent/group"
-	"github.com/cloudreve/Cloudreve/v4/ent/node"
-	"github.com/cloudreve/Cloudreve/v4/ent/oauthclient"
-	"github.com/cloudreve/Cloudreve/v4/ent/setting"
-	"github.com/cloudreve/Cloudreve/v4/ent/storagepolicy"
-	"github.com/cloudreve/Cloudreve/v4/inventory/debug"
-	"github.com/cloudreve/Cloudreve/v4/inventory/types"
-	"github.com/cloudreve/Cloudreve/v4/pkg/boolset"
-	"github.com/cloudreve/Cloudreve/v4/pkg/cache"
-	"github.com/cloudreve/Cloudreve/v4/pkg/logging"
-	"github.com/cloudreve/Cloudreve/v4/pkg/util"
+	"github.com/dadastory/CloudRevo/application/constants"
+	"github.com/dadastory/CloudRevo/ent"
+	"github.com/dadastory/CloudRevo/ent/group"
+	"github.com/dadastory/CloudRevo/ent/node"
+	"github.com/dadastory/CloudRevo/ent/oauthclient"
+	"github.com/dadastory/CloudRevo/ent/setting"
+	"github.com/dadastory/CloudRevo/ent/share"
+	"github.com/dadastory/CloudRevo/ent/storagepolicy"
+	"github.com/dadastory/CloudRevo/inventory/debug"
+	"github.com/dadastory/CloudRevo/inventory/types"
+	"github.com/dadastory/CloudRevo/pkg/boolset"
+	"github.com/dadastory/CloudRevo/pkg/cache"
+	"github.com/dadastory/CloudRevo/pkg/logging"
+	"github.com/dadastory/CloudRevo/pkg/util"
 	"github.com/samber/lo"
 )
 
@@ -35,6 +36,9 @@ func migrate(l logging.Logger, client *ent.Client, ctx context.Context, kv cache
 	l.Info("Creating basic table schema...")
 	if err := client.Schema.Create(ctx); err != nil {
 		return fmt.Errorf("Failed creating schema resources: %w", err)
+	}
+	if err := migrateDefaultShareMarkers(ctx, client); err != nil {
+		return fmt.Errorf("failed migrating default share markers: %w", err)
 	}
 
 	migrateDefaultSettings(l, client, ctx, kv)
@@ -57,6 +61,37 @@ func migrate(l logging.Logger, client *ent.Client, ctx context.Context, kv cache
 
 	client.Setting.Create().SetName(DBVersionPrefix + requiredDbVersion).SetValue("installed").Save(ctx)
 	return nil
+}
+
+// migrateDefaultShareMarkers copies the legacy JSON marker into the indexed
+// column after Ent has created it. It is safe to retry before the version mark
+// is written because it only changes rows whose values differ.
+func migrateDefaultShareMarkers(ctx context.Context, client *ent.Client) error {
+	const pageSize = 100
+	lastID := 0
+	for {
+		shares, err := client.Share.Query().
+			Where(share.IDGT(lastID)).
+			Order(ent.Asc(share.FieldID)).
+			Limit(pageSize).
+			All(ctx)
+		if err != nil {
+			return err
+		}
+		for _, item := range shares {
+			lastID = item.ID
+			legacyDefault := item.Props != nil && item.Props.Default
+			if item.IsDefault == legacyDefault {
+				continue
+			}
+			if err := client.Share.UpdateOneID(item.ID).SetIsDefault(legacyDefault).Exec(ctx); err != nil {
+				return err
+			}
+		}
+		if len(shares) < pageSize {
+			return nil
+		}
+	}
 }
 
 func migrateDefaultSettings(l logging.Logger, client *ent.Client, ctx context.Context, kv cache.Driver) {
@@ -163,11 +198,11 @@ func migrateAdminGroup(l logging.Logger, client *ent.Client, ctx context.Context
 		SetMaxStorage(1 * constants.TB). // 1 TB default storage
 		SetPermissions(permissions).
 		SetSettings(&types.GroupSetting{
-			SourceBatchSize:  1000,
-			Aria2BatchSize:   50,
-			MaxWalkedFiles:   100000,
-			TrashRetention:   7 * 24 * 3600,
-			RedirectedSource: true,
+			SourceBatchSize:         1000,
+			RemoteDownloadBatchSize: 50,
+			MaxWalkedFiles:          100000,
+			TrashRetention:          7 * 24 * 3600,
+			RedirectedSource:        true,
 		}).
 		Save(ctx); err != nil {
 		return fmt.Errorf("failed to create default admin group: %w", err)
@@ -195,11 +230,11 @@ func migrateUserGroup(l logging.Logger, client *ent.Client, ctx context.Context)
 		SetMaxStorage(1 * constants.GB). // 1 GB default storage
 		SetPermissions(permissions).
 		SetSettings(&types.GroupSetting{
-			SourceBatchSize:  10,
-			Aria2BatchSize:   1,
-			MaxWalkedFiles:   100000,
-			TrashRetention:   7 * 24 * 3600,
-			RedirectedSource: true,
+			SourceBatchSize:         10,
+			RemoteDownloadBatchSize: 1,
+			MaxWalkedFiles:          100000,
+			TrashRetention:          7 * 24 * 3600,
+			RedirectedSource:        true,
 		}).
 		Save(ctx); err != nil {
 		return fmt.Errorf("failed to create default user group: %w", err)
@@ -252,20 +287,15 @@ func migrateMasterNode(l logging.Logger, client *ent.Client, ctx context.Context
 		SetCapabilities(capabilities).
 		SetName("Master").
 		SetSettings(&types.NodeSetting{
-			Provider: types.DownloaderProviderAria2,
+			Provider: types.DownloaderProviderGopeed,
+			GopeedSetting: &types.GopeedSetting{
+				Server:       "http://gopeed:9999",
+				Token:        os.Getenv(EnvGopeedAPIToken),
+				DownloadPath: "/app/Downloads",
+				TempPath:     "/cloudrevo/data/temp/gopeed",
+			},
 		}).
 		SetStatus(node.StatusActive)
-
-	_, enableAria2 := os.LookupEnv(EnvEnableAria2)
-	if enableAria2 {
-		l.Info("Aria2 is override as enabled.")
-		stm.SetSettings(&types.NodeSetting{
-			Provider: types.DownloaderProviderAria2,
-			Aria2Setting: &types.Aria2Setting{
-				Server: "http://127.0.0.1:6800/jsonrpc",
-			},
-		})
-	}
 
 	l.Info("Insert default master node...")
 	if _, err := stm.Save(ctx); err != nil {
@@ -309,7 +339,7 @@ func migrateOAuthClientiOS(l logging.Logger, client *ent.Client, ctx context.Con
 		SetName(OAuthClientiOSName).
 		SetRedirectUris([]string{OAuthClientiOSRedirectURI}).
 		SetScopes([]string{"profile", "email", "openid", "offline_access", "UserInfo.Write", "UserSecurityInfo.Write", "Workflow.Write", "Files.Write", "Shares.Write", "Finance.Write", "DavAccount.Write"}).
-		SetProps(&types.OAuthClientProps{Icon: "/static/img/cloudreve_ios.svg", RefreshTokenTTL: 7776000}).
+		SetProps(&types.OAuthClientProps{Icon: "/static/img/cloudrevo_ios.svg", RefreshTokenTTL: 7776000}).
 		SetIsEnabled(true).
 		Save(ctx); err != nil {
 		return fmt.Errorf("failed to create default OAuth client: %w", err)
@@ -330,7 +360,7 @@ func migrateOAuthClientDesktop(l logging.Logger, client *ent.Client, ctx context
 		SetName(OAuthClientDesktopName).
 		SetRedirectUris([]string{OAuthClientDesktopRedirectURI}).
 		SetScopes([]string{"profile", "email", "openid", "offline_access", "UserInfo.Write", "Workflow.Write", "Files.Write", "Shares.Write"}).
-		SetProps(&types.OAuthClientProps{Icon: "/static/img/cloudreve.svg", RefreshTokenTTL: 7776000}).
+		SetProps(&types.OAuthClientProps{Icon: "/static/img/cloudrevo.svg", RefreshTokenTTL: 7776000}).
 		SetIsEnabled(true).
 		Save(ctx); err != nil {
 		return fmt.Errorf("failed to create default OAuth client: %w", err)
@@ -588,12 +618,9 @@ func applyPatches(l logging.Logger, client *ent.Client, ctx context.Context, req
 		return err
 	}
 
-	requiredDbVersion = strings.TrimSuffix(requiredDbVersion, "-pro")
-
 	// Find the latest applied version
 	var latestAppliedVersion *semver.Version
 	for _, v := range allVersionMarks {
-		v.Name = strings.TrimSuffix(v.Name, "-pro")
 		version, err := semver.NewVersion(strings.TrimPrefix(v.Name, DBVersionPrefix))
 		if err != nil {
 			l.Warning("Failed to parse past version %s: %s", v.Name, err)

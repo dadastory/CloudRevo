@@ -1,4 +1,4 @@
-module github.com/cloudreve/Cloudreve/v4
+module github.com/dadastory/CloudRevo
 
 go 1.25.0
 
@@ -10,6 +10,7 @@ require (
 	github.com/aliyun/alibabacloud-oss-go-sdk-v2 v1.3.0
 	github.com/aws/aws-sdk-go v1.34.0
 	github.com/bodgit/sevenzip v1.6.0
+	github.com/casbin/casbin/v3 v3.10.0
 	github.com/cloudflare/cfssl v1.6.1
 	github.com/dhowden/tag v0.0.0-20230630033851-978a0926ee25
 	github.com/dsoprea/go-exif/v3 v3.0.1
@@ -68,6 +69,7 @@ require (
 
 require (
 	ariga.io/atlas v0.19.1-0.20240203083654-5948b60a8e43 // indirect
+	github.com/bmatcuk/doublestar/v4 v4.6.1 // indirect
 	cloud.google.com/go v0.81.0 // indirect
 	github.com/STARRY-S/zip v0.2.1 // indirect
 	github.com/agext/levenshtein v1.2.1 // indirect
@@ -79,6 +81,7 @@ require (
 	github.com/bytedance/gopkg v0.1.3 // indirect
 	github.com/bytedance/sonic v1.14.1 // indirect
 	github.com/bytedance/sonic/loader v0.3.0 // indirect
+	github.com/casbin/govaluate v1.3.0 // indirect
 	github.com/clbanning/mxj v1.8.4 // indirect
 	github.com/cloudwego/base64x v0.1.6 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect

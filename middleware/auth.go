@@ -4,19 +4,19 @@ import (
 	"crypto/subtle"
 	"net/http"
 
-	"github.com/cloudreve/Cloudreve/v4/application/dependency"
-	"github.com/cloudreve/Cloudreve/v4/ent"
-	"github.com/cloudreve/Cloudreve/v4/inventory"
-	"github.com/cloudreve/Cloudreve/v4/inventory/types"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/driver/oss"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/fs"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/manager"
-	"github.com/cloudreve/Cloudreve/v4/pkg/logging"
-	"github.com/cloudreve/Cloudreve/v4/pkg/request"
-	"github.com/cloudreve/Cloudreve/v4/pkg/util"
+	"github.com/dadastory/CloudRevo/application/dependency"
+	"github.com/dadastory/CloudRevo/ent"
+	"github.com/dadastory/CloudRevo/inventory"
+	"github.com/dadastory/CloudRevo/inventory/types"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/driver/oss"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/fs"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/manager"
+	"github.com/dadastory/CloudRevo/pkg/logging"
+	"github.com/dadastory/CloudRevo/pkg/request"
+	"github.com/dadastory/CloudRevo/pkg/util"
 
-	"github.com/cloudreve/Cloudreve/v4/pkg/auth"
-	"github.com/cloudreve/Cloudreve/v4/pkg/serializer"
+	"github.com/dadastory/CloudRevo/pkg/auth"
+	"github.com/dadastory/CloudRevo/pkg/serializer"
 	"github.com/gin-gonic/gin"
 )
 
@@ -111,7 +111,7 @@ func WebDAVAuth() gin.HandlerFunc {
 				c.Next()
 				return
 			}
-			c.Writer.Header()["WWW-Authenticate"] = []string{`Basic realm="cloudreve"`}
+			c.Writer.Header()["WWW-Authenticate"] = []string{`Basic realm="cloudrevo"`}
 			c.Status(http.StatusUnauthorized)
 			c.Abort()
 			return

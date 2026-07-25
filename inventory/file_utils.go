@@ -6,13 +6,13 @@ import (
 	"strings"
 
 	"entgo.io/ent/dialect/sql"
-	"github.com/cloudreve/Cloudreve/v4/ent"
-	"github.com/cloudreve/Cloudreve/v4/ent/entity"
-	"github.com/cloudreve/Cloudreve/v4/ent/file"
-	"github.com/cloudreve/Cloudreve/v4/ent/metadata"
-	"github.com/cloudreve/Cloudreve/v4/ent/predicate"
-	"github.com/cloudreve/Cloudreve/v4/inventory/types"
-	"github.com/cloudreve/Cloudreve/v4/pkg/hashid"
+	"github.com/dadastory/CloudRevo/ent"
+	"github.com/dadastory/CloudRevo/ent/entity"
+	"github.com/dadastory/CloudRevo/ent/file"
+	"github.com/dadastory/CloudRevo/ent/metadata"
+	"github.com/dadastory/CloudRevo/ent/predicate"
+	"github.com/dadastory/CloudRevo/inventory/types"
+	"github.com/dadastory/CloudRevo/pkg/hashid"
 	"github.com/samber/lo"
 )
 

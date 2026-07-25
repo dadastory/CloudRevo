@@ -5,8 +5,8 @@ import (
 	_ "embed"
 	"flag"
 
-	"github.com/cloudreve/Cloudreve/v4/cmd"
-	"github.com/cloudreve/Cloudreve/v4/pkg/util"
+	"github.com/dadastory/CloudRevo/cmd"
+	"github.com/dadastory/CloudRevo/pkg/util"
 )
 
 var (

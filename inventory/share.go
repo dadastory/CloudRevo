@@ -5,16 +5,16 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/cloudreve/Cloudreve/v4/inventory/types"
+	"github.com/dadastory/CloudRevo/inventory/types"
 
 	"entgo.io/ent/dialect/sql"
-	"github.com/cloudreve/Cloudreve/v4/ent"
-	"github.com/cloudreve/Cloudreve/v4/ent/file"
-	"github.com/cloudreve/Cloudreve/v4/ent/predicate"
-	"github.com/cloudreve/Cloudreve/v4/ent/share"
-	"github.com/cloudreve/Cloudreve/v4/ent/user"
-	"github.com/cloudreve/Cloudreve/v4/pkg/conf"
-	"github.com/cloudreve/Cloudreve/v4/pkg/hashid"
+	"github.com/dadastory/CloudRevo/ent"
+	"github.com/dadastory/CloudRevo/ent/file"
+	"github.com/dadastory/CloudRevo/ent/predicate"
+	"github.com/dadastory/CloudRevo/ent/share"
+	"github.com/dadastory/CloudRevo/ent/user"
+	"github.com/dadastory/CloudRevo/pkg/conf"
+	"github.com/dadastory/CloudRevo/pkg/hashid"
 	"github.com/samber/lo"
 )
 
@@ -67,6 +67,7 @@ type (
 		OwnerID         int
 		FileID          int
 		Props           *types.ShareProps
+		Default         bool
 	}
 
 	ListShareArgs struct {
@@ -75,6 +76,7 @@ type (
 		FileID     int
 		PublicOnly bool
 		ShareIDs   []int
+		DefaultOnly bool
 	}
 	ListShareResult struct {
 		*PaginationResults
@@ -130,6 +132,7 @@ func (c *shareClient) Upsert(ctx context.Context, params *CreateShareParams) (*e
 		if params.Props != nil {
 			createQuery.SetProps(params.Props)
 		}
+		createQuery.SetIsDefault(params.Default)
 
 		return createQuery.Save(ctx)
 	}
@@ -150,6 +153,7 @@ func (c *shareClient) Upsert(ctx context.Context, params *CreateShareParams) (*e
 	if params.Props != nil {
 		query.SetProps(params.Props)
 	}
+	query.SetIsDefault(params.Default)
 
 	return query.Save(ctx)
 }
@@ -363,6 +367,9 @@ func (c *shareClient) listQuery(args *ListShareArgs) *ent.ShareQuery {
 
 	if len(args.ShareIDs) > 0 {
 		query.Where(share.IDIn(args.ShareIDs...))
+	}
+	if args.DefaultOnly {
+		query.Where(share.IsDefaultEQ(true))
 	}
 
 	return query

@@ -387,6 +387,7 @@ var (
 		{Name: "downloads", Type: field.TypeInt, Default: 0},
 		{Name: "expires", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"mysql": "datetime"}},
 		{Name: "remain_downloads", Type: field.TypeInt, Nullable: true},
+		{Name: "is_default", Type: field.TypeBool, Default: false},
 		{Name: "props", Type: field.TypeJSON, Nullable: true},
 		{Name: "file_shares", Type: field.TypeInt, Nullable: true},
 		{Name: "user_shares", Type: field.TypeInt, Nullable: true},
@@ -399,15 +400,22 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "shares_files_shares",
-				Columns:    []*schema.Column{SharesColumns[10]},
+				Columns:    []*schema.Column{SharesColumns[11]},
 				RefColumns: []*schema.Column{FilesColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "shares_users_shares",
-				Columns:    []*schema.Column{SharesColumns[11]},
+				Columns:    []*schema.Column{SharesColumns[12]},
 				RefColumns: []*schema.Column{UsersColumns[0]},
 				OnDelete:   schema.SetNull,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "share_is_default",
+				Unique:  false,
+				Columns: []*schema.Column{SharesColumns[9]},
 			},
 		},
 	}

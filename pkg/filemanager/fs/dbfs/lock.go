@@ -8,11 +8,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cloudreve/Cloudreve/v4/ent"
-	"github.com/cloudreve/Cloudreve/v4/inventory/types"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/fs"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/lock"
-	"github.com/cloudreve/Cloudreve/v4/pkg/hashid"
+	"github.com/dadastory/CloudRevo/ent"
+	"github.com/dadastory/CloudRevo/inventory/types"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/fs"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/lock"
+	"github.com/dadastory/CloudRevo/pkg/hashid"
 	"github.com/samber/lo"
 )
 
@@ -60,8 +60,9 @@ func (f *DBFS) ConfirmLock(ctx context.Context, ancestor fs.File, uri *fs.URI, t
 
 func (f *DBFS) Lock(ctx context.Context, d time.Duration, requester *ent.User, zeroDepth bool, application lock.Application,
 	uri *fs.URI, token string) (fs.LockSession, error) {
-	// Get navigator
-	navigator, err := f.getNavigator(ctx, uri, NavigatorCapabilityLockFile)
+	// Locking is an implementation primitive. The actual operation owns the
+	// share capability check, so do not expose a generic share lock capability.
+	navigator, err := f.getNavigator(ctx, uri)
 	if err != nil {
 		return nil, err
 	}
@@ -75,8 +76,10 @@ func (f *DBFS) Lock(ctx context.Context, d time.Duration, requester *ent.User, z
 		return nil, fs.ErrNotSupportedAction.WithError(fmt.Errorf("cannot lock root folder"))
 	}
 
-	// Lock require create or update permission
-	if _, ok := ctx.Value(ByPassOwnerCheckCtxKey{}).(bool); !ok && ancestor.Owner().ID != requester.ID {
+	// Only an update-authorized WOPI edit may acquire a lock for a shared file.
+	// All other shared and non-owner lock requests retain the owner boundary.
+	sharedWopiWrite := allowsSharedWopiWriteLock(navigator, ancestor, application)
+	if _, ok := ctx.Value(ByPassOwnerCheckCtxKey{}).(bool); !ok && ancestor.Owner().ID != requester.ID && !sharedWopiWrite {
 		return nil, fs.ErrOwnerOnly
 	}
 
@@ -96,6 +99,11 @@ func (f *DBFS) Lock(ctx context.Context, d time.Duration, requester *ent.User, z
 	}
 
 	return ls, nil
+}
+
+func allowsSharedWopiWriteLock(navigator Navigator, target *File, application lock.Application) bool {
+	return application.Type == string(fs.ApplicationViewer) &&
+		isShareNavigatorWithCapability(navigator, target, NavigatorCapabilityVersionControl)
 }
 
 func (f *DBFS) Unlock(ctx context.Context, tokens ...string) error {
@@ -319,7 +327,7 @@ func lockTupleFromUri(uri *fs.URI, u *ent.User, hasher hashid.Encoder) (string, 
 	if id == "" {
 		id = strconv.Itoa(u.ID)
 	}
-	ns := fmt.Sprintf(id + "/" + string(uri.FileSystem()))
+	ns := fmt.Sprintf("%s/%s", id, uri.FileSystem())
 	root := uri.Path()
 	return ns, root, ns + "/" + root
 }

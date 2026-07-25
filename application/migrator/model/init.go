@@ -6,8 +6,8 @@ import (
 
 	"github.com/jinzhu/gorm"
 
-	"github.com/cloudreve/Cloudreve/v4/application/migrator/conf"
-	"github.com/cloudreve/Cloudreve/v4/pkg/util"
+	"github.com/dadastory/CloudRevo/application/migrator/conf"
+	"github.com/dadastory/CloudRevo/pkg/util"
 	_ "github.com/jinzhu/gorm/dialects/mssql"
 	_ "github.com/jinzhu/gorm/dialects/mysql"
 	_ "github.com/jinzhu/gorm/dialects/postgres"

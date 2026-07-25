@@ -8,12 +8,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cloudreve/Cloudreve/v4/ent"
-	"github.com/cloudreve/Cloudreve/v4/ent/task"
-	"github.com/cloudreve/Cloudreve/v4/inventory"
-	"github.com/cloudreve/Cloudreve/v4/inventory/types"
-	"github.com/cloudreve/Cloudreve/v4/pkg/hashid"
-	"github.com/cloudreve/Cloudreve/v4/pkg/logging"
+	"github.com/dadastory/CloudRevo/ent"
+	"github.com/dadastory/CloudRevo/ent/task"
+	"github.com/dadastory/CloudRevo/inventory"
+	"github.com/dadastory/CloudRevo/inventory/types"
+	"github.com/dadastory/CloudRevo/pkg/hashid"
+	"github.com/dadastory/CloudRevo/pkg/logging"
 	"github.com/gofrs/uuid"
 	"github.com/samber/lo"
 )
@@ -380,6 +380,12 @@ func init() {
 			task.StatusQueued: persistTask,
 		},
 		task.StatusQueued: {
+			task.StatusCanceled: func(ctx context.Context, task Task, newStatus task.Status, q *queue) error {
+				if q.registry != nil {
+					q.registry.Delete(task.ID())
+				}
+				return persistTask(ctx, task, newStatus, q)
+			},
 			task.StatusProcessing: func(ctx context.Context, task Task, newStatus task.Status, q *queue) error {
 				if err := persistTask(ctx, task, newStatus, q); err != nil {
 					return err
@@ -529,5 +535,8 @@ func saveTaskToInventory(ctx context.Context, task Task, newStatus task.Status, 
 	}
 
 	task.OnPersisted(res)
+	if q.registry != nil && task.Owner() != nil {
+		q.registry.Publish(task.Owner().ID)
+	}
 	return nil
 }

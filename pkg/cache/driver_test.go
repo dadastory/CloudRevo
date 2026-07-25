@@ -1,61 +1,64 @@
 package cache
 
 import (
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
-func TestSet(t *testing.T) {
+func TestDriverSet(t *testing.T) {
 	asserts := assert.New(t)
+	store := newTestMemoStore()
 
-	asserts.NoError(Set("123", "321", -1))
+	asserts.NoError(store.Set("123", "321", -1))
 }
 
-func TestGet(t *testing.T) {
+func TestDriverGet(t *testing.T) {
 	asserts := assert.New(t)
-	asserts.NoError(Set("123", "321", -1))
+	store := newTestMemoStore()
+	asserts.NoError(store.Set("123", "321", -1))
 
-	value, ok := Get("123")
+	value, ok := store.Get("123")
 	asserts.True(ok)
 	asserts.Equal("321", value)
 
-	value, ok = Get("not_exist")
+	value, ok = store.Get("not_exist")
 	asserts.False(ok)
 }
 
-func TestDeletes(t *testing.T) {
+func TestDriverDelete(t *testing.T) {
 	asserts := assert.New(t)
-	asserts.NoError(Set("123", "321", -1))
-	err := Deletes([]string{"123"}, "")
+	store := newTestMemoStore()
+	asserts.NoError(store.Set("123", "321", -1))
+	err := store.Delete("", "123")
 	asserts.NoError(err)
-	_, exist := Get("123")
+	_, exist := store.Get("123")
 	asserts.False(exist)
 }
 
-func TestGetSettings(t *testing.T) {
+func TestDriverGets(t *testing.T) {
 	asserts := assert.New(t)
-	asserts.NoError(Set("test_1", "1", -1))
+	store := newTestMemoStore()
+	asserts.NoError(store.Set("test_1", "1", -1))
 
-	values, missed := GetSettings([]string{"1", "2"}, "test_")
-	asserts.Equal(map[string]string{"1": "1"}, values)
+	values, missed := store.Gets([]string{"1", "2"}, "test_")
+	asserts.Equal(map[string]any{"1": "1"}, values)
 	asserts.Equal([]string{"2"}, missed)
 }
 
-func TestSetSettings(t *testing.T) {
+func TestDriverSets(t *testing.T) {
 	asserts := assert.New(t)
+	store := newTestMemoStore()
 
-	err := SetSettings(map[string]string{"3": "3", "4": "4"}, "test_")
+	err := store.Sets(map[string]any{"3": "3", "4": "4"}, "test_")
 	asserts.NoError(err)
-	value1, _ := Get("test_3")
-	value2, _ := Get("test_4")
+	value1, _ := store.Get("test_3")
+	value2, _ := store.Get("test_4")
 	asserts.Equal("3", value1)
 	asserts.Equal("4", value2)
 }
 
-func TestInit(t *testing.T) {
-	asserts := assert.New(t)
-
-	asserts.NotPanics(func() {
-		Init()
-	})
+func TestNewMemoStoreImplementsDriver(t *testing.T) {
+	var store Driver = newTestMemoStore()
+	assert.NotNil(t, store)
 }

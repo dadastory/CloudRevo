@@ -2,8 +2,8 @@ package request
 
 import (
 	"context"
-	"github.com/cloudreve/Cloudreve/v4/pkg/auth"
-	"github.com/cloudreve/Cloudreve/v4/pkg/logging"
+	"github.com/dadastory/CloudRevo/pkg/auth"
+	"github.com/dadastory/CloudRevo/pkg/logging"
 	"net/http"
 	"net/url"
 	"strings"

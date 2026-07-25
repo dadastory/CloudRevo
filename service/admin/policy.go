@@ -6,28 +6,27 @@ import (
 	"fmt"
 	"net/url"
 	"strconv"
-	"strings"
 	"time"
 
-	"github.com/cloudreve/Cloudreve/v4/application/constants"
-	"github.com/cloudreve/Cloudreve/v4/application/dependency"
-	"github.com/cloudreve/Cloudreve/v4/ent"
-	"github.com/cloudreve/Cloudreve/v4/inventory"
-	"github.com/cloudreve/Cloudreve/v4/inventory/types"
-	"github.com/cloudreve/Cloudreve/v4/pkg/cluster/routes"
-	"github.com/cloudreve/Cloudreve/v4/pkg/credmanager"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/driver/cos"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/driver/ks3"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/driver/obs"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/driver/onedrive"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/driver/oss"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/driver/s3"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/manager"
-	"github.com/cloudreve/Cloudreve/v4/pkg/logging"
-	"github.com/cloudreve/Cloudreve/v4/pkg/util"
+	"github.com/dadastory/CloudRevo/application/constants"
+	"github.com/dadastory/CloudRevo/application/dependency"
+	"github.com/dadastory/CloudRevo/ent"
+	"github.com/dadastory/CloudRevo/inventory"
+	"github.com/dadastory/CloudRevo/inventory/types"
+	"github.com/dadastory/CloudRevo/pkg/cluster/routes"
+	"github.com/dadastory/CloudRevo/pkg/credmanager"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/driver/cos"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/driver/ks3"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/driver/obs"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/driver/onedrive"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/driver/oss"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/driver/s3"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/manager"
+	"github.com/dadastory/CloudRevo/pkg/logging"
+	"github.com/dadastory/CloudRevo/pkg/util"
 
-	"github.com/cloudreve/Cloudreve/v4/pkg/request"
-	"github.com/cloudreve/Cloudreve/v4/pkg/serializer"
+	"github.com/dadastory/CloudRevo/pkg/request"
+	"github.com/dadastory/CloudRevo/pkg/serializer"
 	"github.com/gin-gonic/gin"
 )
 
@@ -125,7 +124,7 @@ func (service *SlavePingService) Test(c *gin.Context) error {
 
 	version := constants.BackendVersion
 
-	if strings.TrimSuffix(res.Data.(string), "-pro") != version {
+	if res.Data.(string) != version {
 		return serializer.NewError(serializer.CodeVersionMismatch, "Master: "+res.Data.(string)+", Slave: "+version, nil)
 	}
 

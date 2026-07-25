@@ -10,29 +10,29 @@ import (
 	"os"
 	"time"
 
-	"github.com/cloudreve/Cloudreve/v4/application/constants"
-	"github.com/cloudreve/Cloudreve/v4/application/dependency"
-	"github.com/cloudreve/Cloudreve/v4/ent"
-	"github.com/cloudreve/Cloudreve/v4/pkg/cache"
-	"github.com/cloudreve/Cloudreve/v4/pkg/conf"
-	"github.com/cloudreve/Cloudreve/v4/pkg/crontab"
-	"github.com/cloudreve/Cloudreve/v4/pkg/email"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/driver/onedrive"
-	"github.com/cloudreve/Cloudreve/v4/pkg/logging"
-	"github.com/cloudreve/Cloudreve/v4/pkg/setting"
-	"github.com/cloudreve/Cloudreve/v4/pkg/util"
-	"github.com/cloudreve/Cloudreve/v4/routers"
+	"github.com/dadastory/CloudRevo/application/constants"
+	"github.com/dadastory/CloudRevo/application/dependency"
+	"github.com/dadastory/CloudRevo/ent"
+	"github.com/dadastory/CloudRevo/pkg/cache"
+	"github.com/dadastory/CloudRevo/pkg/conf"
+	"github.com/dadastory/CloudRevo/pkg/crontab"
+	"github.com/dadastory/CloudRevo/pkg/email"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/driver/onedrive"
+	"github.com/dadastory/CloudRevo/pkg/logging"
+	"github.com/dadastory/CloudRevo/pkg/setting"
+	"github.com/dadastory/CloudRevo/pkg/util"
+	"github.com/dadastory/CloudRevo/routers"
 	"github.com/gin-gonic/gin"
 )
 
 type Server interface {
-	// Start starts the Cloudreve server.
+	// Start starts the CloudRevo server.
 	Start() error
 	PrintBanner()
 	Close()
 }
 
-// NewServer constructs a new Cloudreve server instance with given dependency.
+// NewServer constructs a new CloudRevo server instance with given dependency.
 func NewServer(dep dependency.Dep) Server {
 	return &server{
 		dep:    dep,
@@ -60,7 +60,7 @@ func (s *server) PrintBanner() {
 / /___| | (_) | |_| | (_| | | |  __/\ V /  __/
 \____/|_|\___/ \__,_|\__,_|_|  \___| \_/ \___|
 
-   V` + constants.BackendVersion + `  Commit #` + constants.LastCommit + `  Pro=` + constants.IsPro + `
+   V` + constants.BackendVersion + `  Commit #` + constants.LastCommit + `
 ================================================
 
 `)

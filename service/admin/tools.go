@@ -6,15 +6,15 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/cloudreve/Cloudreve/v4/inventory/types"
+	"github.com/dadastory/CloudRevo/inventory/types"
 
-	"github.com/cloudreve/Cloudreve/v4/application/dependency"
-	"github.com/cloudreve/Cloudreve/v4/pkg/boolset"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/manager"
-	request2 "github.com/cloudreve/Cloudreve/v4/pkg/request"
-	"github.com/cloudreve/Cloudreve/v4/pkg/serializer"
-	"github.com/cloudreve/Cloudreve/v4/pkg/setting"
-	"github.com/cloudreve/Cloudreve/v4/pkg/wopi"
+	"github.com/dadastory/CloudRevo/application/dependency"
+	"github.com/dadastory/CloudRevo/pkg/boolset"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/manager"
+	request2 "github.com/dadastory/CloudRevo/pkg/request"
+	"github.com/dadastory/CloudRevo/pkg/serializer"
+	"github.com/dadastory/CloudRevo/pkg/setting"
+	"github.com/dadastory/CloudRevo/pkg/wopi"
 	"github.com/gin-gonic/gin"
 	"github.com/wneessen/go-mail"
 )
@@ -160,9 +160,9 @@ func (s *TestSMTPService) Test(c *gin.Context) error {
 	}
 	m.ReplyToFormat(s.Settings["fromName"], s.Settings["replyTo"])
 	m.To(s.To)
-	m.Subject("Cloudreve SMTP Test")
+	m.Subject("CloudRevo SMTP Test")
 	m.SetMessageID()
-	m.SetBodyString(mail.TypeTextHTML, "This is a test email from Cloudreve.")
+	m.SetBodyString(mail.TypeTextHTML, "This is a test email from CloudRevo.")
 
 	err = d.DialAndSendWithContext(c, m)
 	if err != nil {

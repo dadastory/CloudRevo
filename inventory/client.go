@@ -8,13 +8,13 @@ import (
 	"time"
 
 	"entgo.io/ent/dialect/sql"
-	"github.com/cloudreve/Cloudreve/v4/ent"
-	_ "github.com/cloudreve/Cloudreve/v4/ent/runtime"
-	"github.com/cloudreve/Cloudreve/v4/inventory/debug"
-	"github.com/cloudreve/Cloudreve/v4/pkg/cache"
-	"github.com/cloudreve/Cloudreve/v4/pkg/conf"
-	"github.com/cloudreve/Cloudreve/v4/pkg/logging"
-	"github.com/cloudreve/Cloudreve/v4/pkg/util"
+	"github.com/dadastory/CloudRevo/ent"
+	_ "github.com/dadastory/CloudRevo/ent/runtime"
+	"github.com/dadastory/CloudRevo/inventory/debug"
+	"github.com/dadastory/CloudRevo/pkg/cache"
+	"github.com/dadastory/CloudRevo/pkg/conf"
+	"github.com/dadastory/CloudRevo/pkg/logging"
+	"github.com/dadastory/CloudRevo/pkg/util"
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/lib/pq"
 	"modernc.org/sqlite"
@@ -23,7 +23,7 @@ import (
 const (
 	DBVersionPrefix           = "db_version_"
 	EnvDefaultOverwritePrefix = "CR_SETTING_DEFAULT_"
-	EnvEnableAria2            = "CR_ENABLE_ARIA2"
+	EnvGopeedAPIToken         = "CR_GOPEED_API_TOKEN"
 )
 
 // InitializeDBClient runs migration and returns a new ent.Client with additional configurations

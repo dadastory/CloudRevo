@@ -11,11 +11,11 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/cloudreve/Cloudreve/v4/ent/file"
-	"github.com/cloudreve/Cloudreve/v4/ent/predicate"
-	"github.com/cloudreve/Cloudreve/v4/ent/share"
-	"github.com/cloudreve/Cloudreve/v4/ent/user"
-	"github.com/cloudreve/Cloudreve/v4/inventory/types"
+	"github.com/dadastory/CloudRevo/ent/file"
+	"github.com/dadastory/CloudRevo/ent/predicate"
+	"github.com/dadastory/CloudRevo/ent/share"
+	"github.com/dadastory/CloudRevo/ent/user"
+	"github.com/dadastory/CloudRevo/inventory/types"
 )
 
 // ShareUpdate is the builder for updating Share entities.
@@ -163,6 +163,20 @@ func (su *ShareUpdate) AddRemainDownloads(i int) *ShareUpdate {
 // ClearRemainDownloads clears the value of the "remain_downloads" field.
 func (su *ShareUpdate) ClearRemainDownloads() *ShareUpdate {
 	su.mutation.ClearRemainDownloads()
+	return su
+}
+
+// SetIsDefault sets the "is_default" field.
+func (su *ShareUpdate) SetIsDefault(b bool) *ShareUpdate {
+	su.mutation.SetIsDefault(b)
+	return su
+}
+
+// SetNillableIsDefault sets the "is_default" field if the given value is not nil.
+func (su *ShareUpdate) SetNillableIsDefault(b *bool) *ShareUpdate {
+	if b != nil {
+		su.SetIsDefault(*b)
+	}
 	return su
 }
 
@@ -325,6 +339,9 @@ func (su *ShareUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if su.mutation.RemainDownloadsCleared() {
 		_spec.ClearField(share.FieldRemainDownloads, field.TypeInt)
+	}
+	if value, ok := su.mutation.IsDefault(); ok {
+		_spec.SetField(share.FieldIsDefault, field.TypeBool, value)
 	}
 	if value, ok := su.mutation.Props(); ok {
 		_spec.SetField(share.FieldProps, field.TypeJSON, value)
@@ -545,6 +562,20 @@ func (suo *ShareUpdateOne) ClearRemainDownloads() *ShareUpdateOne {
 	return suo
 }
 
+// SetIsDefault sets the "is_default" field.
+func (suo *ShareUpdateOne) SetIsDefault(b bool) *ShareUpdateOne {
+	suo.mutation.SetIsDefault(b)
+	return suo
+}
+
+// SetNillableIsDefault sets the "is_default" field if the given value is not nil.
+func (suo *ShareUpdateOne) SetNillableIsDefault(b *bool) *ShareUpdateOne {
+	if b != nil {
+		suo.SetIsDefault(*b)
+	}
+	return suo
+}
+
 // SetProps sets the "props" field.
 func (suo *ShareUpdateOne) SetProps(tp *types.ShareProps) *ShareUpdateOne {
 	suo.mutation.SetProps(tp)
@@ -734,6 +765,9 @@ func (suo *ShareUpdateOne) sqlSave(ctx context.Context) (_node *Share, err error
 	}
 	if suo.mutation.RemainDownloadsCleared() {
 		_spec.ClearField(share.FieldRemainDownloads, field.TypeInt)
+	}
+	if value, ok := suo.mutation.IsDefault(); ok {
+		_spec.SetField(share.FieldIsDefault, field.TypeBool, value)
 	}
 	if value, ok := suo.mutation.Props(); ok {
 		_spec.SetField(share.FieldProps, field.TypeJSON, value)

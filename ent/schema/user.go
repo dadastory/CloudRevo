@@ -4,7 +4,7 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
-	"github.com/cloudreve/Cloudreve/v4/inventory/types"
+	"github.com/dadastory/CloudRevo/inventory/types"
 )
 
 // User holds the schema definition for the User entity.

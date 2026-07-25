@@ -1,14 +1,14 @@
 package middleware
 
 import (
-	"github.com/cloudreve/Cloudreve/v4/application/dependency"
-	"github.com/cloudreve/Cloudreve/v4/pkg/sessionstore"
+	"github.com/dadastory/CloudRevo/application/dependency"
+	"github.com/dadastory/CloudRevo/pkg/sessionstore"
 	"net/http"
 	"strings"
 
-	"github.com/cloudreve/Cloudreve/v4/pkg/conf"
-	"github.com/cloudreve/Cloudreve/v4/pkg/serializer"
-	"github.com/cloudreve/Cloudreve/v4/pkg/util"
+	"github.com/dadastory/CloudRevo/pkg/conf"
+	"github.com/dadastory/CloudRevo/pkg/serializer"
+	"github.com/dadastory/CloudRevo/pkg/util"
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
 )
@@ -16,7 +16,7 @@ import (
 // Store session存储
 var Store sessions.Store
 
-const SessionName = "cloudreve-session"
+const SessionName = "cloudrevo-session"
 
 // Session 初始化session
 func Session(dep dependency.Dep) gin.HandlerFunc {

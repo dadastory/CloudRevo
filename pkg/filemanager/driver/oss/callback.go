@@ -15,8 +15,8 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/cloudreve/Cloudreve/v4/pkg/cache"
-	"github.com/cloudreve/Cloudreve/v4/pkg/request"
+	"github.com/dadastory/CloudRevo/pkg/cache"
+	"github.com/dadastory/CloudRevo/pkg/request"
 )
 
 const (

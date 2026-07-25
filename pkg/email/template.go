@@ -7,8 +7,8 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/cloudreve/Cloudreve/v4/ent"
-	"github.com/cloudreve/Cloudreve/v4/pkg/setting"
+	"github.com/dadastory/CloudRevo/ent"
+	"github.com/dadastory/CloudRevo/pkg/setting"
 )
 
 type CommonContext struct {

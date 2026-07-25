@@ -3,8 +3,8 @@ package controllers
 import (
 	"net/http"
 
-	"github.com/cloudreve/Cloudreve/v4/pkg/wopi"
-	"github.com/cloudreve/Cloudreve/v4/service/explorer"
+	"github.com/dadastory/CloudRevo/pkg/wopi"
+	"github.com/dadastory/CloudRevo/service/explorer"
 	"github.com/gin-gonic/gin"
 )
 

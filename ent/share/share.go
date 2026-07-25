@@ -31,6 +31,8 @@ const (
 	FieldExpires = "expires"
 	// FieldRemainDownloads holds the string denoting the remain_downloads field in the database.
 	FieldRemainDownloads = "remain_downloads"
+	// FieldIsDefault holds the string denoting the is_default field in the database.
+	FieldIsDefault = "is_default"
 	// FieldProps holds the string denoting the props field in the database.
 	FieldProps = "props"
 	// EdgeUser holds the string denoting the user edge name in mutations.
@@ -66,6 +68,7 @@ var Columns = []string{
 	FieldDownloads,
 	FieldExpires,
 	FieldRemainDownloads,
+	FieldIsDefault,
 	FieldProps,
 }
 
@@ -95,7 +98,7 @@ func ValidColumn(column string) bool {
 // package on the initialization of the application. Therefore,
 // it should be imported in the main as follows:
 //
-//	import _ "github.com/cloudreve/Cloudreve/v4/ent/runtime"
+//	import _ "github.com/dadastory/CloudRevo/ent/runtime"
 var (
 	Hooks        [1]ent.Hook
 	Interceptors [1]ent.Interceptor
@@ -109,6 +112,8 @@ var (
 	DefaultViews int
 	// DefaultDownloads holds the default value on creation for the "downloads" field.
 	DefaultDownloads int
+	// DefaultIsDefault holds the default value on creation for the "is_default" field.
+	DefaultIsDefault bool
 )
 
 // OrderOption defines the ordering options for the Share queries.
@@ -157,6 +162,11 @@ func ByExpires(opts ...sql.OrderTermOption) OrderOption {
 // ByRemainDownloads orders the results by the remain_downloads field.
 func ByRemainDownloads(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldRemainDownloads, opts...).ToFunc()
+}
+
+// ByIsDefault orders the results by the is_default field.
+func ByIsDefault(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldIsDefault, opts...).ToFunc()
 }
 
 // ByUserField orders the results by user field.

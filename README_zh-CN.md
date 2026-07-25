@@ -1,77 +1,60 @@
-[English Version](https://github.com/cloudreve/cloudreve/blob/master/README.md)
-
-<h1 align="center">
-  <br>
-  <a href="https://cloudreve.org/" alt="logo" ><img src="https://raw.githubusercontent.com/cloudreve/frontend/master/public/static/img/logo192.png" width="150"/></a>
-  <br>
-  Cloudreve
-  <br>
-</h1>
-
-<h4 align="center">支持多家云存储驱动的公有云文件系统.</h4>
-
 <p align="center">
-  <a href="https://dev.azure.com/abslantliu/cloudreve/_build?definitionId=6">
-    <img src="https://img.shields.io/github/check-runs/cloudreve/cloudreve/master"
-         alt="Azure pipelines">
-  </a>
-  <a href="https://github.com/cloudreve/cloudreve/releases">
-    <img src="https://img.shields.io/github/v/release/cloudreve/cloudreve?include_prereleases" />
-  </a>
-  <a href="https://github.com/cloudreve/cloudreve/releases">
-     <img src="https://badgen.net/static/release%20size/34%20MB/blue"/>
-  </a>
-  <a href="https://hub.docker.com/r/cloudreve/cloudreve">
-  <img alt="Docker Pulls" src="https://img.shields.io/docker/pulls/cloudreve/cloudreve" />
-  </a>
-</p>
-<p align="center">
-  <a href="https://cloudreve.org">主页</a> •
-  <a href="https://demo.cloudreve.org">演示</a> •
-  <a href="https://github.com/cloudreve/cloudreve/discussions">讨论</a> •
-  <a href="https://docs.cloudreve.org">文档</a> •
-  <a href="https://github.com/cloudreve/cloudreve/releases">下载</a> •
-  <a href="https://t.me/cloudreve_official">Telegram</a> •
-  <a href="https://discord.com/invite/WTpMFpZT76">Discord</a>
+  <img src="assets/public/static/img/logo.svg" width="280" alt="CloudRevo">
 </p>
 
-![Screenshot](https://raw.githubusercontent.com/cloudreve/docs/master/images/homepage.png)
+<p align="center">快速、自托管的文件存储，提供权限、分享与离线下载。</p>
 
-## :sparkles: 特性
+<p align="center">
+  <a href="LICENSE">GPL-3.0</a> ·
+  <a href="https://github.com/dadastory/CloudRevo/issues">反馈问题</a>
+</p>
 
-- :cloud: 支持本机、从机、七牛 Kodo、阿里云 OSS、腾讯云 COS、华为云 OBS、金山云 KS3、又拍云、OneDrive (包括世纪互联版) 、S3 兼容协议 作为存储端
-- :outbox_tray: 上传/下载 支持客户端直传，支持下载限速
-- 💾 可对接 Aria2/qBittorrent 离线下载，可使用多个从机节点分担下载任务
-- 📚 在线 压缩/解压缩/压缩包预览、多文件打包下载
-- 💻 覆盖全部存储策略的 WebDAV 协议支持
-- :zap: 拖拽上传、目录上传、并行分片上传
-- :card_file_box: 提取媒体元数据，通过元数据或标签搜索文件
-- :family_woman_girl_boy: 多用户、用户组、多存储策略
-- :link: 创建文件、目录的分享链接，可设定自动过期
-- :eye_speech_bubble: 视频、图像、音频、 ePub 在线预览，文本、Office 文档在线编辑
-- :art: 自定义配色、黑暗模式、PWA 应用、全站单页应用、国际化支持
-- :rocket: All-in-One 打包，开箱即用
-- 🌈 ... ...
+## 已实现功能
 
-## :hammer_and_wrench: 部署
+- **文件权限**：支持用户、用户组、匿名访客和其他用户的查看、创建、修改、删除权限。
+- **分享管理**：支持文件和文件夹分享、多分享链接、新用户默认分享与链接管理。
+- **Gopeed 离线下载**：支持预检查、文件选择、请求头、重试、批量操作、实时进度及单任务连接数设置；不再包含 Aria2。
 
-你可以参考 [快速开始](https://docs.cloudreve.org/overview/quickstart) 启动一个本地实例进行体验、测试。
+## TODO
 
-当你准备好将 Cloudreve 部署到生产环境时，可以参考 [部署](https://docs.cloudreve.org/overview/deploy/) 进行完整部署。
+- [ ] OnlyOffice 协作
+- [ ] 实时协作状态
+- [ ] 桌面端同步
+- [ ] 部署与 API 文档
+- [ ] 更多集成测试
 
-## :gear: 构建
+## 本地启动
 
-你可以参考 [构建](https://docs.cloudreve.org/overview/build/) 从源代码构建 Cloudreve。
+CloudRevo 会在本地构建应用镜像，持久化数据保存在 `./storage/`。
 
-## :rocket: 贡献
+```bash
+cp .env.example .env
+# 在 .env 中设置 POSTGRES_PASSWORD 和 GOPEED_API_TOKEN。
+docker compose up --build
+```
 
-如果你有兴趣为 Cloudreve 贡献代码，请参考 [贡献](https://docs.cloudreve.org/api/contributing/) 了解如何贡献。
+## 一键部署
 
-## :alembic: 技术栈
+以下命令拉取已发布的 CloudRevo 镜像，并将所有数据保存到当前目录；不会执行远程脚本。
 
-- [Go](https://golang.org/) + [Gin](https://github.com/gin-gonic/gin) + [ent](https://github.com/ent/ent)
-- [React](https://github.com/facebook/react) + [Redux](https://github.com/reduxjs/redux) + [Material-UI](https://github.com/mui-org/material-ui)
+```bash
+mkdir -p cloudrevo && cd cloudrevo && curl -fsSLO https://raw.githubusercontent.com/dadastory/CloudRevo/main/docker-compose.yaml && umask 077 && { printf 'POSTGRES_PASSWORD=%s\n' "$(openssl rand -hex 32)"; printf 'GOPEED_API_TOKEN=%s\n' "$(openssl rand -hex 32)"; } > .env && docker compose up -d
+```
 
-## :scroll: 许可证
+## 反馈与免责声明
 
-GPL V3
+项目仍在持续开发。如果发现功能异常、缺失或安全问题，请在 [Issue](https://github.com/dadastory/CloudRevo/issues) 中提供复现步骤；安全敏感问题请按 [SECURITY.md](SECURITY.md) 反馈。
+
+CloudRevo 按“现状”提供，不提供任何担保。你需要自行负责备份、访问控制配置、数据处理，以及适用于自身使用场景的法律合规。
+
+## 致谢
+
+CloudRevo 的实现离不开以下项目：
+
+- [Cloudreve](https://github.com/cloudreve/Cloudreve) 提供了 CloudRevo 所衍生的 GPL-3.0 文件存储基础。
+- [Gopeed](https://github.com/GopeedLab/gopeed) 提供离线下载引擎；CloudRevo 的集成维护在 [dadastory/gopeed](https://github.com/dadastory/gopeed)。
+- [Casbin](https://github.com/casbin/casbin) 提供文件权限所依赖的授权模型和策略执行机制。
+
+## 许可证
+
+CloudRevo 是 Cloudreve 的修改衍生项目，依据 [GPL-3.0](LICENSE) 发布，并非 Cloudreve 官方发行版。

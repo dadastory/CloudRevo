@@ -5,24 +5,24 @@ package runtime
 import (
 	"time"
 
-	"github.com/cloudreve/Cloudreve/v4/ent/davaccount"
-	"github.com/cloudreve/Cloudreve/v4/ent/directlink"
-	"github.com/cloudreve/Cloudreve/v4/ent/entity"
-	"github.com/cloudreve/Cloudreve/v4/ent/file"
-	"github.com/cloudreve/Cloudreve/v4/ent/fsevent"
-	"github.com/cloudreve/Cloudreve/v4/ent/group"
-	"github.com/cloudreve/Cloudreve/v4/ent/metadata"
-	"github.com/cloudreve/Cloudreve/v4/ent/node"
-	"github.com/cloudreve/Cloudreve/v4/ent/oauthclient"
-	"github.com/cloudreve/Cloudreve/v4/ent/oauthgrant"
-	"github.com/cloudreve/Cloudreve/v4/ent/passkey"
-	"github.com/cloudreve/Cloudreve/v4/ent/schema"
-	"github.com/cloudreve/Cloudreve/v4/ent/setting"
-	"github.com/cloudreve/Cloudreve/v4/ent/share"
-	"github.com/cloudreve/Cloudreve/v4/ent/storagepolicy"
-	"github.com/cloudreve/Cloudreve/v4/ent/task"
-	"github.com/cloudreve/Cloudreve/v4/ent/user"
-	"github.com/cloudreve/Cloudreve/v4/inventory/types"
+	"github.com/dadastory/CloudRevo/ent/davaccount"
+	"github.com/dadastory/CloudRevo/ent/directlink"
+	"github.com/dadastory/CloudRevo/ent/entity"
+	"github.com/dadastory/CloudRevo/ent/file"
+	"github.com/dadastory/CloudRevo/ent/fsevent"
+	"github.com/dadastory/CloudRevo/ent/group"
+	"github.com/dadastory/CloudRevo/ent/metadata"
+	"github.com/dadastory/CloudRevo/ent/node"
+	"github.com/dadastory/CloudRevo/ent/oauthclient"
+	"github.com/dadastory/CloudRevo/ent/oauthgrant"
+	"github.com/dadastory/CloudRevo/ent/passkey"
+	"github.com/dadastory/CloudRevo/ent/schema"
+	"github.com/dadastory/CloudRevo/ent/setting"
+	"github.com/dadastory/CloudRevo/ent/share"
+	"github.com/dadastory/CloudRevo/ent/storagepolicy"
+	"github.com/dadastory/CloudRevo/ent/task"
+	"github.com/dadastory/CloudRevo/ent/user"
+	"github.com/dadastory/CloudRevo/inventory/types"
 )
 
 // The init function reads all schema descriptors with runtime code
@@ -341,6 +341,10 @@ func init() {
 	shareDescDownloads := shareFields[2].Descriptor()
 	// share.DefaultDownloads holds the default value on creation for the downloads field.
 	share.DefaultDownloads = shareDescDownloads.Default.(int)
+	// shareDescIsDefault is the schema descriptor for is_default field.
+	shareDescIsDefault := shareFields[5].Descriptor()
+	// share.DefaultIsDefault holds the default value on creation for the is_default field.
+	share.DefaultIsDefault = shareDescIsDefault.Default.(bool)
 	storagepolicyMixin := schema.StoragePolicy{}.Mixin()
 	storagepolicyMixinHooks0 := storagepolicyMixin[0].Hooks()
 	storagepolicy.Hooks[0] = storagepolicyMixinHooks0[0]

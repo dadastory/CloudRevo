@@ -6,16 +6,16 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cloudreve/Cloudreve/v4/application/dependency"
-	"github.com/cloudreve/Cloudreve/v4/ent"
-	"github.com/cloudreve/Cloudreve/v4/ent/user"
-	"github.com/cloudreve/Cloudreve/v4/inventory"
-	"github.com/cloudreve/Cloudreve/v4/pkg/auth"
-	"github.com/cloudreve/Cloudreve/v4/pkg/cluster/routes"
-	"github.com/cloudreve/Cloudreve/v4/pkg/email"
-	"github.com/cloudreve/Cloudreve/v4/pkg/hashid"
-	"github.com/cloudreve/Cloudreve/v4/pkg/serializer"
-	"github.com/cloudreve/Cloudreve/v4/pkg/util"
+	"github.com/dadastory/CloudRevo/application/dependency"
+	"github.com/dadastory/CloudRevo/ent"
+	"github.com/dadastory/CloudRevo/ent/user"
+	"github.com/dadastory/CloudRevo/inventory"
+	"github.com/dadastory/CloudRevo/pkg/auth"
+	"github.com/dadastory/CloudRevo/pkg/cluster/routes"
+	"github.com/dadastory/CloudRevo/pkg/email"
+	"github.com/dadastory/CloudRevo/pkg/hashid"
+	"github.com/dadastory/CloudRevo/pkg/serializer"
+	"github.com/dadastory/CloudRevo/pkg/util"
 	"github.com/gin-gonic/gin"
 )
 
@@ -85,6 +85,10 @@ func (service *UserRegisterService) Register(c *gin.Context) serializer.Response
 		return serializer.Response{Code: serializer.CodeNotFullySuccess}
 	}
 
+	if err := provisionDefaultShareShortcuts(c, dep, expectedUser); err != nil {
+		dep.Logger().Warning("Failed to provision default share shortcuts for user %d: %s", expectedUser.ID, err)
+	}
+
 	return serializer.Response{Data: BuildUser(expectedUser, dep.HashIDEncoder())}
 }
 
@@ -144,5 +148,8 @@ func ActivateUser(c *gin.Context) serializer.Response {
 	}
 
 	util.WithValue(c, inventory.UserCtx{}, activeUser)
+	if err := provisionDefaultShareShortcuts(c, dep, activeUser); err != nil {
+		dep.Logger().Warning("Failed to provision default share shortcuts for user %d: %s", activeUser.ID, err)
+	}
 	return serializer.Response{Data: BuildUser(activeUser, dep.HashIDEncoder())}
 }

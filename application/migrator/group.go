@@ -5,10 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/cloudreve/Cloudreve/v4/application/migrator/model"
-	"github.com/cloudreve/Cloudreve/v4/inventory/types"
-	"github.com/cloudreve/Cloudreve/v4/pkg/boolset"
-	"github.com/cloudreve/Cloudreve/v4/pkg/conf"
+	"github.com/dadastory/CloudRevo/application/migrator/model"
+	"github.com/dadastory/CloudRevo/inventory/types"
+	"github.com/dadastory/CloudRevo/pkg/boolset"
+	"github.com/dadastory/CloudRevo/pkg/conf"
 	"github.com/samber/lo"
 )
 
@@ -40,14 +40,14 @@ func (m *Migrator) migrateGroup() error {
 		})
 
 		newOpts := &types.GroupSetting{
-			CompressSize:          int64(opts.CompressSize),
-			DecompressSize:        int64(opts.DecompressSize),
-			RemoteDownloadOptions: opts.Aria2Options,
-			SourceBatchSize:       opts.SourceBatchSize,
-			RedirectedSource:      opts.RedirectedSource,
-			Aria2BatchSize:        opts.Aria2BatchSize,
-			MaxWalkedFiles:        100000,
-			TrashRetention:        7 * 24 * 3600,
+			CompressSize:            int64(opts.CompressSize),
+			DecompressSize:          int64(opts.DecompressSize),
+			RemoteDownloadOptions:   opts.RemoteDownloadOptions,
+			SourceBatchSize:         opts.SourceBatchSize,
+			RedirectedSource:        opts.RedirectedSource,
+			RemoteDownloadBatchSize: opts.RemoteDownloadBatchSize,
+			MaxWalkedFiles:          100000,
+			TrashRetention:          7 * 24 * 3600,
 		}
 
 		boolset.Sets(map[types.GroupPermission]bool{
@@ -58,7 +58,7 @@ func (m *Migrator) migrateGroup() error {
 			types.GroupPermissionArchiveDownload:  opts.ArchiveDownload,
 			types.GroupPermissionArchiveTask:      opts.ArchiveTask,
 			types.GroupPermissionWebDAVProxy:      opts.WebDAVProxy,
-			types.GroupPermissionRemoteDownload:   opts.Aria2,
+			types.GroupPermissionRemoteDownload:   opts.RemoteDownload,
 			types.GroupPermissionAdvanceDelete:    opts.AdvanceDelete,
 			types.GroupPermissionShare:            group.ShareEnabled,
 			types.GroupPermissionRedirectedSource: opts.RedirectedSource,

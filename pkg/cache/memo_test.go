@@ -1,15 +1,21 @@
 package cache
 
 import (
-	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
+
+	"github.com/dadastory/CloudRevo/pkg/logging"
+	"github.com/stretchr/testify/assert"
 )
+
+func newTestMemoStore() *MemoStore {
+	return NewMemoStore("", logging.NewConsoleLogger(logging.LevelError))
+}
 
 func TestNewMemoStore(t *testing.T) {
 	asserts := assert.New(t)
 
-	store := NewMemoStore()
+	store := newTestMemoStore()
 	asserts.NotNil(store)
 	asserts.NotNil(store.Store)
 }
@@ -17,7 +23,7 @@ func TestNewMemoStore(t *testing.T) {
 func TestMemoStore_Set(t *testing.T) {
 	asserts := assert.New(t)
 
-	store := NewMemoStore()
+	store := newTestMemoStore()
 	err := store.Set("KEY", "vAL", -1)
 	asserts.NoError(err)
 
@@ -28,7 +34,7 @@ func TestMemoStore_Set(t *testing.T) {
 
 func TestMemoStore_Get(t *testing.T) {
 	asserts := assert.New(t)
-	store := NewMemoStore()
+	store := newTestMemoStore()
 
 	// 正常情况
 	{
@@ -72,7 +78,7 @@ func TestMemoStore_Get(t *testing.T) {
 
 func TestMemoStore_Gets(t *testing.T) {
 	asserts := assert.New(t)
-	store := NewMemoStore()
+	store := newTestMemoStore()
 
 	err := store.Set("1", "1,val", -1)
 	err = store.Set("2", "2,val", -1)
@@ -97,7 +103,7 @@ func TestMemoStore_Gets(t *testing.T) {
 
 func TestMemoStore_Sets(t *testing.T) {
 	asserts := assert.New(t)
-	store := NewMemoStore()
+	store := newTestMemoStore()
 
 	err := store.Sets(map[string]interface{}{
 		"1": "1.val",
@@ -119,7 +125,7 @@ func TestMemoStore_Sets(t *testing.T) {
 
 func TestMemoStore_Delete(t *testing.T) {
 	asserts := assert.New(t)
-	store := NewMemoStore()
+	store := newTestMemoStore()
 
 	err := store.Sets(map[string]interface{}{
 		"1": "1.val",
@@ -129,7 +135,7 @@ func TestMemoStore_Delete(t *testing.T) {
 	}, "test_")
 	asserts.NoError(err)
 
-	err = store.Delete([]string{"1", "2"}, "test_")
+	err = store.Delete("test_", "1", "2")
 	asserts.NoError(err)
 	values, miss := store.Gets([]string{"1", "2", "3", "4"}, "test_")
 	asserts.Equal([]string{"1", "2"}, miss)
@@ -138,10 +144,10 @@ func TestMemoStore_Delete(t *testing.T) {
 
 func TestMemoStore_GarbageCollect(t *testing.T) {
 	asserts := assert.New(t)
-	store := NewMemoStore()
+	store := newTestMemoStore()
 	store.Set("test", 1, 1)
 	time.Sleep(time.Duration(2000) * time.Millisecond)
-	store.GarbageCollect()
+	store.GarbageCollect(logging.NewConsoleLogger(logging.LevelError))
 	_, ok := store.Get("test")
 	asserts.False(ok)
 }

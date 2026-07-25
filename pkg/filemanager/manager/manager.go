@@ -5,20 +5,20 @@ import (
 	"io"
 	"time"
 
-	"github.com/cloudreve/Cloudreve/v4/application/dependency"
-	"github.com/cloudreve/Cloudreve/v4/ent"
-	"github.com/cloudreve/Cloudreve/v4/inventory"
-	"github.com/cloudreve/Cloudreve/v4/inventory/types"
-	"github.com/cloudreve/Cloudreve/v4/pkg/auth"
-	"github.com/cloudreve/Cloudreve/v4/pkg/cache"
-	"github.com/cloudreve/Cloudreve/v4/pkg/conf"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/driver"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/fs"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/fs/dbfs"
-	"github.com/cloudreve/Cloudreve/v4/pkg/hashid"
-	"github.com/cloudreve/Cloudreve/v4/pkg/logging"
-	"github.com/cloudreve/Cloudreve/v4/pkg/serializer"
-	"github.com/cloudreve/Cloudreve/v4/pkg/setting"
+	"github.com/dadastory/CloudRevo/application/dependency"
+	"github.com/dadastory/CloudRevo/ent"
+	"github.com/dadastory/CloudRevo/inventory"
+	"github.com/dadastory/CloudRevo/inventory/types"
+	"github.com/dadastory/CloudRevo/pkg/auth"
+	"github.com/dadastory/CloudRevo/pkg/cache"
+	"github.com/dadastory/CloudRevo/pkg/conf"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/driver"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/fs"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/fs/dbfs"
+	"github.com/dadastory/CloudRevo/pkg/hashid"
+	"github.com/dadastory/CloudRevo/pkg/logging"
+	"github.com/dadastory/CloudRevo/pkg/serializer"
+	"github.com/dadastory/CloudRevo/pkg/setting"
 )
 
 var (
@@ -56,7 +56,7 @@ type (
 		// UpsertMedata update or insert metadata of given file
 		PatchMedata(ctx context.Context, path []*fs.URI, data ...fs.MetadataPatch) error
 		// CreateViewerSession creates a viewer session for given file
-		CreateViewerSession(ctx context.Context, uri *fs.URI, version string, viewer *types.Viewer) (*ViewerSession, error)
+		CreateViewerSession(ctx context.Context, uri *fs.URI, version string, viewer *types.Viewer, action types.ViewerAction) (*ViewerSession, error)
 		// TraverseFile traverses a file to its root file, return the file with linked root.
 		TraverseFile(ctx context.Context, fileID int) (fs.File, error)
 		// SearchFullText searches full text for given query and offset
@@ -81,11 +81,15 @@ type (
 		GetStorageDriver(ctx context.Context, policy *ent.StoragePolicy) (driver.Handler, error)
 		// PatchView patches the view setting of a file
 		PatchView(ctx context.Context, uri *fs.URI, view *types.ExplorerView) error
+		PatchShareAccessRule(ctx context.Context, uri *fs.URI, rule *types.ShareAccessRule) error
 	}
 
 	ShareManagement interface {
 		// CreateShare creates a share link for given path
 		CreateOrUpdateShare(ctx context.Context, path *fs.URI, args *CreateShareArgs) (*ent.Share, error)
+		// CreateOrUpdateShareWithClient persists the share through the supplied
+		// client, allowing callers to include the marker write in a transaction.
+		CreateOrUpdateShareWithClient(ctx context.Context, path *fs.URI, args *CreateShareArgs, shareClient inventory.ShareClient) (*ent.Share, error)
 	}
 
 	Archiver interface {
@@ -123,6 +127,7 @@ type (
 		Expire          *time.Time
 		ShareView       bool
 		ShowReadMe      bool
+		Default         bool
 	}
 
 	FullTextSearchResults struct {

@@ -11,8 +11,8 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/cloudreve/Cloudreve/v4/ent/directlink"
-	"github.com/cloudreve/Cloudreve/v4/ent/file"
+	"github.com/dadastory/CloudRevo/ent/directlink"
+	"github.com/dadastory/CloudRevo/ent/file"
 )
 
 // DirectLinkCreate is the builder for creating a DirectLink entity.

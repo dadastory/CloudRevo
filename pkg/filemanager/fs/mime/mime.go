@@ -3,8 +3,8 @@ package mime
 import (
 	"context"
 	"encoding/json"
-	"github.com/cloudreve/Cloudreve/v4/pkg/logging"
-	"github.com/cloudreve/Cloudreve/v4/pkg/setting"
+	"github.com/dadastory/CloudRevo/pkg/logging"
+	"github.com/dadastory/CloudRevo/pkg/setting"
 	"mime"
 	"path"
 )

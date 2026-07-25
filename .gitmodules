@@ -1,3 +1,8 @@
 [submodule "assets"]
 	path = assets
-	url = https://github.com/cloudreve/frontend.git
+	url = https://github.com/dadastory/CloudRevo_web.git
+	branch = main
+[submodule "third_party/gopeed"]
+	path = third_party/gopeed
+	url = https://github.com/dadastory/gopeed.git
+	branch = cloudrevo

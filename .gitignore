@@ -27,6 +27,7 @@ temp
 version.lock
 
 # Config file
+.env
 *.ini
 conf/conf.ini
 /statik/
@@ -36,5 +37,8 @@ dist/
 data/
 tmp/
 .devcontainer/
-cloudreve
+cloudrevo
+
+# OpenSpec planning artifacts are local-only.
+/openspec/
 .DS_Store

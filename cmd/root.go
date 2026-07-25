@@ -4,14 +4,13 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/cloudreve/Cloudreve/v4/pkg/util"
+	"github.com/dadastory/CloudRevo/pkg/util"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
 
 var (
-	confPath   string
-	licenseKey string
+	confPath string
 )
 
 func init() {
@@ -20,10 +19,10 @@ func init() {
 }
 
 var rootCmd = &cobra.Command{
-	Use:   "cloudreve",
-	Short: "Cloudreve is a server-side self-hosted cloud storage platform",
+	Use:   "cloudrevo",
+	Short: "CloudRevo is a next-generation fast self-hosted cloud drive",
 	Long: `Self-hosted file management and sharing system, supports multiple storage providers.
-Complete documentation is available at https://docs.cloudreve.org/`,
+Source and documentation: https://github.com/dadastory/CloudRevo`,
 	Run: func(cmd *cobra.Command, args []string) {
 		// Do Stuff Here
 	},

@@ -6,15 +6,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cloudreve/Cloudreve/v4/application/dependency"
-	"github.com/cloudreve/Cloudreve/v4/ent"
-	"github.com/cloudreve/Cloudreve/v4/inventory"
-	"github.com/cloudreve/Cloudreve/v4/inventory/types"
-	"github.com/cloudreve/Cloudreve/v4/pkg/auth"
-	"github.com/cloudreve/Cloudreve/v4/pkg/cluster/routes"
-	"github.com/cloudreve/Cloudreve/v4/pkg/hashid"
-	"github.com/cloudreve/Cloudreve/v4/pkg/serializer"
-	"github.com/cloudreve/Cloudreve/v4/pkg/util"
+	"github.com/dadastory/CloudRevo/application/dependency"
+	"github.com/dadastory/CloudRevo/ent"
+	"github.com/dadastory/CloudRevo/inventory"
+	"github.com/dadastory/CloudRevo/inventory/types"
+	"github.com/dadastory/CloudRevo/pkg/auth"
+	"github.com/dadastory/CloudRevo/pkg/cluster/routes"
+	"github.com/dadastory/CloudRevo/pkg/hashid"
+	"github.com/dadastory/CloudRevo/pkg/serializer"
+	"github.com/dadastory/CloudRevo/pkg/util"
 	"github.com/gin-gonic/gin"
 	"github.com/samber/lo"
 )
@@ -307,7 +307,7 @@ func (s *UserInfoService) GetUserInfo(c *gin.Context) (*UserInfoResponse, error)
 			resp.UpdatedAt = u.UpdatedAt.Unix()
 		case types.ScopeEmail:
 			resp.Email = u.Email
-			resp.EmailVerified = true // Users in Cloudreve have verified emails
+			resp.EmailVerified = true // Users in CloudRevo have verified emails
 		}
 	}
 

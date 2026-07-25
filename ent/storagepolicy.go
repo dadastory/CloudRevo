@@ -10,9 +10,9 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
-	"github.com/cloudreve/Cloudreve/v4/ent/node"
-	"github.com/cloudreve/Cloudreve/v4/ent/storagepolicy"
-	"github.com/cloudreve/Cloudreve/v4/inventory/types"
+	"github.com/dadastory/CloudRevo/ent/node"
+	"github.com/dadastory/CloudRevo/ent/storagepolicy"
+	"github.com/dadastory/CloudRevo/inventory/types"
 )
 
 // StoragePolicy is the model entity for the StoragePolicy schema.

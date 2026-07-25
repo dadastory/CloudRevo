@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cloudreve/Cloudreve/v4/inventory/types"
-	"github.com/cloudreve/Cloudreve/v4/pkg/auth/requestinfo"
-	"github.com/cloudreve/Cloudreve/v4/pkg/boolset"
+	"github.com/dadastory/CloudRevo/inventory/types"
+	"github.com/dadastory/CloudRevo/pkg/auth/requestinfo"
+	"github.com/dadastory/CloudRevo/pkg/boolset"
 )
 
 type (
@@ -309,10 +309,6 @@ func (s *settingProvider) CustomProps(ctx context.Context) []types.CustomProps {
 		return []types.CustomProps{}
 	}
 	return props
-}
-
-func (s *settingProvider) License(ctx context.Context) string {
-	return s.getString(ctx, "license", "")
 }
 
 func (s *settingProvider) AvatarProcess(ctx context.Context) *AvatarProcess {

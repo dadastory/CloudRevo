@@ -10,14 +10,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cloudreve/Cloudreve/v4/application/constants"
-	"github.com/cloudreve/Cloudreve/v4/application/dependency"
-	"github.com/cloudreve/Cloudreve/v4/inventory"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/manager"
-	"github.com/cloudreve/Cloudreve/v4/pkg/serializer"
-	"github.com/cloudreve/Cloudreve/v4/pkg/setting"
-	"github.com/cloudreve/Cloudreve/v4/pkg/thumb"
-	"github.com/cloudreve/Cloudreve/v4/pkg/util"
+	"github.com/dadastory/CloudRevo/application/constants"
+	"github.com/dadastory/CloudRevo/application/dependency"
+	"github.com/dadastory/CloudRevo/inventory"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/manager"
+	"github.com/dadastory/CloudRevo/pkg/serializer"
+	"github.com/dadastory/CloudRevo/pkg/setting"
+	"github.com/dadastory/CloudRevo/pkg/thumb"
+	"github.com/dadastory/CloudRevo/pkg/util"
 	"github.com/gin-gonic/gin"
 	"github.com/samber/lo"
 )
@@ -87,7 +87,6 @@ func (s *SummaryService) Summary(c *gin.Context) (*HomepageSummary, error) {
 	res := &HomepageSummary{
 		Version: &Version{
 			Version: constants.BackendVersion,
-			Pro:     constants.IsProBool,
 			Commit:  constants.LastCommit,
 		},
 		SiteURls: lo.Map(dep.SettingProvider().AllSiteURLs(c), func(item *url.URL, index int) string {

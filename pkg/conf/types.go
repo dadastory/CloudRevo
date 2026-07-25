@@ -1,6 +1,6 @@
 package conf
 
-import "github.com/cloudreve/Cloudreve/v4/pkg/util"
+import "github.com/dadastory/CloudRevo/pkg/util"
 
 type DBType string
 
@@ -104,7 +104,7 @@ var RedisConfig = &Redis{
 // DatabaseConfig 数据库配置
 var DatabaseConfig = &Database{
 	Charset:     "utf8mb4",
-	DBFile:      util.DataPath("cloudreve.db"),
+	DBFile:      util.DataPath("cloudrevo.db"),
 	Port:        3306,
 	UnixSocket:  false,
 	DatabaseURL: "",

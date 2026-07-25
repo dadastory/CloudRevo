@@ -3,8 +3,8 @@ package migrator
 import (
 	"context"
 	"fmt"
-	"github.com/cloudreve/Cloudreve/v4/application/migrator/conf"
-	"github.com/cloudreve/Cloudreve/v4/application/migrator/model"
+	"github.com/dadastory/CloudRevo/application/migrator/conf"
+	"github.com/dadastory/CloudRevo/application/migrator/model"
 )
 
 // TODO:

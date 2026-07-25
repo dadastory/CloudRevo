@@ -11,25 +11,25 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
-	"github.com/cloudreve/Cloudreve/v4/ent/davaccount"
-	"github.com/cloudreve/Cloudreve/v4/ent/directlink"
-	"github.com/cloudreve/Cloudreve/v4/ent/entity"
-	"github.com/cloudreve/Cloudreve/v4/ent/file"
-	"github.com/cloudreve/Cloudreve/v4/ent/fsevent"
-	"github.com/cloudreve/Cloudreve/v4/ent/group"
-	"github.com/cloudreve/Cloudreve/v4/ent/metadata"
-	"github.com/cloudreve/Cloudreve/v4/ent/node"
-	"github.com/cloudreve/Cloudreve/v4/ent/oauthclient"
-	"github.com/cloudreve/Cloudreve/v4/ent/oauthgrant"
-	"github.com/cloudreve/Cloudreve/v4/ent/passkey"
-	"github.com/cloudreve/Cloudreve/v4/ent/predicate"
-	"github.com/cloudreve/Cloudreve/v4/ent/setting"
-	"github.com/cloudreve/Cloudreve/v4/ent/share"
-	"github.com/cloudreve/Cloudreve/v4/ent/storagepolicy"
-	"github.com/cloudreve/Cloudreve/v4/ent/task"
-	"github.com/cloudreve/Cloudreve/v4/ent/user"
-	"github.com/cloudreve/Cloudreve/v4/inventory/types"
-	"github.com/cloudreve/Cloudreve/v4/pkg/boolset"
+	"github.com/dadastory/CloudRevo/ent/davaccount"
+	"github.com/dadastory/CloudRevo/ent/directlink"
+	"github.com/dadastory/CloudRevo/ent/entity"
+	"github.com/dadastory/CloudRevo/ent/file"
+	"github.com/dadastory/CloudRevo/ent/fsevent"
+	"github.com/dadastory/CloudRevo/ent/group"
+	"github.com/dadastory/CloudRevo/ent/metadata"
+	"github.com/dadastory/CloudRevo/ent/node"
+	"github.com/dadastory/CloudRevo/ent/oauthclient"
+	"github.com/dadastory/CloudRevo/ent/oauthgrant"
+	"github.com/dadastory/CloudRevo/ent/passkey"
+	"github.com/dadastory/CloudRevo/ent/predicate"
+	"github.com/dadastory/CloudRevo/ent/setting"
+	"github.com/dadastory/CloudRevo/ent/share"
+	"github.com/dadastory/CloudRevo/ent/storagepolicy"
+	"github.com/dadastory/CloudRevo/ent/task"
+	"github.com/dadastory/CloudRevo/ent/user"
+	"github.com/dadastory/CloudRevo/inventory/types"
+	"github.com/dadastory/CloudRevo/pkg/boolset"
 	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/gofrs/uuid"
 )
@@ -11440,6 +11440,7 @@ type ShareMutation struct {
 	expires             *time.Time
 	remain_downloads    *int
 	addremain_downloads *int
+	is_default          *bool
 	props               **types.ShareProps
 	clearedFields       map[string]struct{}
 	user                *int
@@ -11950,6 +11951,42 @@ func (m *ShareMutation) ResetRemainDownloads() {
 	delete(m.clearedFields, share.FieldRemainDownloads)
 }
 
+// SetIsDefault sets the "is_default" field.
+func (m *ShareMutation) SetIsDefault(b bool) {
+	m.is_default = &b
+}
+
+// IsDefault returns the value of the "is_default" field in the mutation.
+func (m *ShareMutation) IsDefault() (r bool, exists bool) {
+	v := m.is_default
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldIsDefault returns the old "is_default" field's value of the Share entity.
+// If the Share object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ShareMutation) OldIsDefault(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldIsDefault is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldIsDefault requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldIsDefault: %w", err)
+	}
+	return oldValue.IsDefault, nil
+}
+
+// ResetIsDefault resets all changes to the "is_default" field.
+func (m *ShareMutation) ResetIsDefault() {
+	m.is_default = nil
+}
+
 // SetProps sets the "props" field.
 func (m *ShareMutation) SetProps(tp *types.ShareProps) {
 	m.props = &tp
@@ -12111,7 +12148,7 @@ func (m *ShareMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ShareMutation) Fields() []string {
-	fields := make([]string, 0, 9)
+	fields := make([]string, 0, 10)
 	if m.created_at != nil {
 		fields = append(fields, share.FieldCreatedAt)
 	}
@@ -12135,6 +12172,9 @@ func (m *ShareMutation) Fields() []string {
 	}
 	if m.remain_downloads != nil {
 		fields = append(fields, share.FieldRemainDownloads)
+	}
+	if m.is_default != nil {
+		fields = append(fields, share.FieldIsDefault)
 	}
 	if m.props != nil {
 		fields = append(fields, share.FieldProps)
@@ -12163,6 +12203,8 @@ func (m *ShareMutation) Field(name string) (ent.Value, bool) {
 		return m.Expires()
 	case share.FieldRemainDownloads:
 		return m.RemainDownloads()
+	case share.FieldIsDefault:
+		return m.IsDefault()
 	case share.FieldProps:
 		return m.Props()
 	}
@@ -12190,6 +12232,8 @@ func (m *ShareMutation) OldField(ctx context.Context, name string) (ent.Value, e
 		return m.OldExpires(ctx)
 	case share.FieldRemainDownloads:
 		return m.OldRemainDownloads(ctx)
+	case share.FieldIsDefault:
+		return m.OldIsDefault(ctx)
 	case share.FieldProps:
 		return m.OldProps(ctx)
 	}
@@ -12256,6 +12300,13 @@ func (m *ShareMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetRemainDownloads(v)
+		return nil
+	case share.FieldIsDefault:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetIsDefault(v)
 		return nil
 	case share.FieldProps:
 		v, ok := value.(*types.ShareProps)
@@ -12408,6 +12459,9 @@ func (m *ShareMutation) ResetField(name string) error {
 		return nil
 	case share.FieldRemainDownloads:
 		m.ResetRemainDownloads()
+		return nil
+	case share.FieldIsDefault:
+		m.ResetIsDefault()
 		return nil
 	case share.FieldProps:
 		m.ResetProps()

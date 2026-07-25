@@ -3,26 +3,26 @@ package routers
 import (
 	"net/http"
 
-	"github.com/cloudreve/Cloudreve/v4/application/constants"
-	"github.com/cloudreve/Cloudreve/v4/application/dependency"
-	"github.com/cloudreve/Cloudreve/v4/inventory/types"
-	"github.com/cloudreve/Cloudreve/v4/middleware"
-	"github.com/cloudreve/Cloudreve/v4/pkg/cluster"
-	"github.com/cloudreve/Cloudreve/v4/pkg/conf"
-	"github.com/cloudreve/Cloudreve/v4/pkg/downloader/slave"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/fs"
-	"github.com/cloudreve/Cloudreve/v4/pkg/hashid"
-	"github.com/cloudreve/Cloudreve/v4/pkg/logging"
-	"github.com/cloudreve/Cloudreve/v4/pkg/webdav"
-	"github.com/cloudreve/Cloudreve/v4/routers/controllers"
-	adminsvc "github.com/cloudreve/Cloudreve/v4/service/admin"
-	"github.com/cloudreve/Cloudreve/v4/service/basic"
-	"github.com/cloudreve/Cloudreve/v4/service/explorer"
-	"github.com/cloudreve/Cloudreve/v4/service/node"
-	"github.com/cloudreve/Cloudreve/v4/service/oauth"
-	"github.com/cloudreve/Cloudreve/v4/service/setting"
-	sharesvc "github.com/cloudreve/Cloudreve/v4/service/share"
-	usersvc "github.com/cloudreve/Cloudreve/v4/service/user"
+	"github.com/dadastory/CloudRevo/application/constants"
+	"github.com/dadastory/CloudRevo/application/dependency"
+	"github.com/dadastory/CloudRevo/inventory/types"
+	"github.com/dadastory/CloudRevo/middleware"
+	"github.com/dadastory/CloudRevo/pkg/cluster"
+	"github.com/dadastory/CloudRevo/pkg/conf"
+	"github.com/dadastory/CloudRevo/pkg/downloader/slave"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/fs"
+	"github.com/dadastory/CloudRevo/pkg/hashid"
+	"github.com/dadastory/CloudRevo/pkg/logging"
+	"github.com/dadastory/CloudRevo/pkg/webdav"
+	"github.com/dadastory/CloudRevo/routers/controllers"
+	adminsvc "github.com/dadastory/CloudRevo/service/admin"
+	"github.com/dadastory/CloudRevo/service/basic"
+	"github.com/dadastory/CloudRevo/service/explorer"
+	"github.com/dadastory/CloudRevo/service/node"
+	"github.com/dadastory/CloudRevo/service/oauth"
+	"github.com/dadastory/CloudRevo/service/setting"
+	sharesvc "github.com/dadastory/CloudRevo/service/share"
+	usersvc "github.com/dadastory/CloudRevo/service/user"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-contrib/gzip"
 	"github.com/gin-gonic/gin"
@@ -125,8 +125,6 @@ func initSlaveRouter(dep dependency.Dep) *gin.Engine {
 			controllers.FromJSON[adminsvc.SlavePingService](adminsvc.SlavePingParameterCtx{}),
 			controllers.SlavePing,
 		)
-		// // 测试 Aria2 RPC 连接
-		// v4.POST("ping/aria2", controllers.AdminTestAria2)
 		initSlaveFileRouter(v4)
 
 		// 离线下载
@@ -193,7 +191,7 @@ func initCORS(l logging.Logger, config conf.ConfigProvider, router *gin.Engine) 
 
 	// slave模式下未启动跨域的警告
 	if config.System().Mode == conf.SlaveMode {
-		l.Warning("You are running Cloudreve as slave node, if you are using slave storage policy, please enable CORS feature in config file, otherwise file cannot be uploaded from Master basic.")
+		l.Warning("You are running CloudRevo as slave node, if you are using slave storage policy, please enable CORS feature in config file, otherwise file cannot be uploaded from Master basic.")
 	}
 }
 
@@ -219,9 +217,9 @@ func initMasterRouter(dep dependency.Dep) *gin.Engine {
 		// 获取文件内容
 		wopi.GET(":id/contents", controllers.GetFile)
 		// 更新文件内容
-		wopi.POST(":id/contents", controllers.PutFile)
+		wopi.POST(":id/contents", middleware.WopiWriteAccess(), controllers.PutFile)
 		// 通用文件操作
-		wopi.POST(":id", controllers.ModifyFile)
+		wopi.POST(":id", middleware.WopiWriteAccess(), controllers.ModifyFile)
 	}
 
 	v4 := r.Group(constants.APIPrefix)
@@ -550,6 +548,7 @@ func initMasterRouter(dep dependency.Dep) *gin.Engine {
 		wf.Use(middleware.LoginRequired())
 		wf.Use(middleware.RequiredScopes(types.ScopeWorkflowRead))
 		{
+			wf.GET("events", controllers.WorkflowEvents)
 			// List
 			wf.GET("",
 				controllers.FromQuery[explorer.ListTaskService](explorer.ListTaskParamCtx{}),
@@ -575,6 +574,11 @@ func initMasterRouter(dep dependency.Dep) *gin.Engine {
 
 			remoteDownload := wf.Group("download")
 			{
+				remoteDownload.POST("preview",
+					middleware.RequiredScopes(types.ScopeWorkflowWrite),
+					controllers.FromJSON[explorer.DownloadWorkflowService](explorer.PreviewDownloadParamCtx{}),
+					controllers.PreviewRemoteDownload,
+				)
 				// Create task to download a file
 				remoteDownload.POST("",
 					middleware.RequiredScopes(types.ScopeWorkflowWrite),
@@ -592,6 +596,21 @@ func initMasterRouter(dep dependency.Dep) *gin.Engine {
 					middleware.RequiredScopes(types.ScopeWorkflowWrite),
 					middleware.HashID(hashid.TaskID),
 					controllers.CancelDownloadTask,
+				)
+				remoteDownload.POST(":id/retry",
+					middleware.RequiredScopes(types.ScopeWorkflowWrite),
+					middleware.HashID(hashid.TaskID),
+					controllers.RetryDownloadTask,
+				)
+				remoteDownload.POST("batch/retry",
+					middleware.RequiredScopes(types.ScopeWorkflowWrite),
+					controllers.FromJSON[explorer.BatchDownloadTaskService](explorer.BatchDownloadTaskParamCtx{}),
+					controllers.RetryDownloadTasks,
+				)
+				remoteDownload.DELETE("batch",
+					middleware.RequiredScopes(types.ScopeWorkflowWrite),
+					controllers.FromJSON[explorer.BatchDownloadTaskService](explorer.BatchDownloadTaskParamCtx{}),
+					controllers.DeleteDownloadTasks,
 				)
 			}
 		}
@@ -786,10 +805,14 @@ func initMasterRouter(dep dependency.Dep) *gin.Engine {
 				controllers.FromJSON[explorer.PatchViewService](explorer.PatchViewParameterCtx{}),
 				controllers.PatchView,
 			)
+			file.PATCH("share-access-rule",
+				middleware.RequiredScopes(types.ScopeFilesWrite),
+				controllers.FromJSON[explorer.PatchShareAccessRuleService](explorer.PatchShareAccessRuleParameterCtx{}),
+				controllers.PatchShareAccessRule,
+			)
 
 			// Server event push
 			file.GET("events",
-				middleware.LoginRequired(),
 				middleware.IsFunctionEnabled(func(c *gin.Context) bool {
 					return dep.SettingProvider().EventHubEnabled(c)
 				}),
@@ -1228,6 +1251,11 @@ func initMasterRouter(dep dependency.Dep) *gin.Engine {
 						controllers.FromUri[adminsvc.SingleShareService](adminsvc.SingleShareParamCtx{}),
 						controllers.AdminGetShare,
 					)
+					share.PUT(":id/default",
+						middleware.RequiredScopes(types.ScopeAdminWrite),
+						controllers.FromJSON[adminsvc.DefaultShareService](adminsvc.DefaultShareParamCtx{}),
+						controllers.AdminSetDefaultShare,
+					)
 					// Batch delete shares
 					share.POST("batch/delete",
 						middleware.RequiredScopes(types.ScopeAdminWrite),
@@ -1249,6 +1277,16 @@ func initMasterRouter(dep dependency.Dep) *gin.Engine {
 					middleware.RequiredScopes(types.ScopeUserInfoRead),
 					controllers.FromQuery[usersvc.SearchUserService](usersvc.SearchUserParamCtx{}),
 					controllers.UserSearch,
+				)
+				user.GET("groups/search",
+					middleware.RequiredScopes(types.ScopeUserInfoRead),
+					controllers.FromQuery[usersvc.SearchShareGroupService](usersvc.SearchShareGroupParamCtx{}),
+					controllers.UserSearchGroups,
+				)
+				user.POST("groups/resolve",
+					middleware.RequiredScopes(types.ScopeUserInfoRead),
+					controllers.FromJSON[usersvc.ResolveShareGroupsService](usersvc.ResolveShareGroupsParamCtx{}),
+					controllers.UserResolveGroups,
 				)
 
 				// WebAuthn 注册相关

@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/cloudreve/Cloudreve/v4/ent"
-	"github.com/cloudreve/Cloudreve/v4/ent/group"
-	"github.com/cloudreve/Cloudreve/v4/pkg/cache"
-	"github.com/cloudreve/Cloudreve/v4/pkg/conf"
+	"github.com/dadastory/CloudRevo/ent"
+	"github.com/dadastory/CloudRevo/ent/group"
+	"github.com/dadastory/CloudRevo/pkg/cache"
+	"github.com/dadastory/CloudRevo/pkg/conf"
 )
 
 type (
@@ -26,6 +26,10 @@ type (
 		AnonymousGroup(ctx context.Context) (*ent.Group, error)
 		// ListAll returns all groups.
 		ListAll(ctx context.Context) ([]*ent.Group, error)
+		// Search returns a bounded, deterministic set of groups matching a keyword.
+		Search(ctx context.Context, keyword string, limit int) ([]*ent.Group, error)
+		// GetByIDs resolves a bounded set of group identities in deterministic order.
+		GetByIDs(ctx context.Context, ids []int) ([]*ent.Group, error)
 		// GetByID returns the group by id.
 		GetByID(ctx context.Context, id int) (*ent.Group, error)
 		// ListGroups returns a list of groups with pagination.
@@ -74,6 +78,29 @@ func (c *groupClient) AnonymousGroup(ctx context.Context) (*ent.Group, error) {
 
 func (c *groupClient) ListAll(ctx context.Context) ([]*ent.Group, error) {
 	return withGroupEagerLoading(ctx, c.client.Group.Query()).All(ctx)
+}
+
+func (c *groupClient) Search(ctx context.Context, keyword string, limit int) ([]*ent.Group, error) {
+	if limit <= 0 {
+		return []*ent.Group{}, nil
+	}
+
+	return withGroupEagerLoading(ctx, c.client.Group.Query()).
+		Where(group.NameContainsFold(keyword)).
+		Order(group.ByID()).
+		Limit(limit).
+		All(ctx)
+}
+
+func (c *groupClient) GetByIDs(ctx context.Context, ids []int) ([]*ent.Group, error) {
+	if len(ids) == 0 {
+		return []*ent.Group{}, nil
+	}
+
+	return withGroupEagerLoading(ctx, c.client.Group.Query()).
+		Where(group.IDIn(ids...)).
+		Order(group.ByID()).
+		All(ctx)
 }
 
 func (c *groupClient) Upsert(ctx context.Context, group *ent.Group) (*ent.Group, error) {

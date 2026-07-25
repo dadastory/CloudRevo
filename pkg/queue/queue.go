@@ -9,9 +9,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/cloudreve/Cloudreve/v4/ent/task"
-	"github.com/cloudreve/Cloudreve/v4/inventory"
-	"github.com/cloudreve/Cloudreve/v4/pkg/logging"
+	"github.com/dadastory/CloudRevo/ent/task"
+	"github.com/dadastory/CloudRevo/inventory"
+	"github.com/dadastory/CloudRevo/pkg/logging"
 	"github.com/jpillora/backoff"
 )
 
@@ -23,6 +23,8 @@ type (
 		Shutdown()
 		// SubmitTask submits a Task to the queue.
 		QueueTask(ctx context.Context, t Task) error
+		// CancelTask removes a task that has not started from the queue.
+		CancelTask(ctx context.Context, t Task) error
 		// BusyWorkers returns the numbers of workers in the running process.
 		BusyWorkers() int
 		// BusyWorkers returns the numbers of success tasks.
@@ -62,7 +64,8 @@ type (
 )
 
 var (
-	CriticalErr = errors.New("non-retryable error")
+	CriticalErr       = errors.New("non-retryable error")
+	ErrTaskNotWaiting = errors.New("task is not waiting in queue")
 )
 
 func New(l logging.Logger, taskClient inventory.TaskClient, registry TaskRegistry, dep Dep, opts ...Option) Queue {
@@ -206,6 +209,20 @@ func (q *queue) QueueTask(ctx context.Context, t Task) error {
 	}
 
 	return nil
+}
+
+func (q *queue) CancelTask(ctx context.Context, t Task) error {
+	if t.Status() != task.StatusQueued {
+		return ErrTaskNotWaiting
+	}
+	removed, err := q.scheduler.Remove(t.ID())
+	if err != nil {
+		return err
+	}
+	if !removed {
+		return ErrTaskNotWaiting
+	}
+	return q.transitStatus(ctx, t, task.StatusCanceled)
 }
 
 // newContext creates a new context for a new Task iteration.

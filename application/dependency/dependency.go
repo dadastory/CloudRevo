@@ -8,30 +8,30 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cloudreve/Cloudreve/v4/application/statics"
-	"github.com/cloudreve/Cloudreve/v4/ent"
-	"github.com/cloudreve/Cloudreve/v4/inventory"
-	"github.com/cloudreve/Cloudreve/v4/pkg/auth"
-	"github.com/cloudreve/Cloudreve/v4/pkg/cache"
-	"github.com/cloudreve/Cloudreve/v4/pkg/cluster"
-	"github.com/cloudreve/Cloudreve/v4/pkg/conf"
-	"github.com/cloudreve/Cloudreve/v4/pkg/credmanager"
-	"github.com/cloudreve/Cloudreve/v4/pkg/email"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/encrypt"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/eventhub"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/fs/mime"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/lock"
-	"github.com/cloudreve/Cloudreve/v4/pkg/hashid"
-	"github.com/cloudreve/Cloudreve/v4/pkg/logging"
-	"github.com/cloudreve/Cloudreve/v4/pkg/mediameta"
-	"github.com/cloudreve/Cloudreve/v4/pkg/queue"
-	"github.com/cloudreve/Cloudreve/v4/pkg/request"
-	"github.com/cloudreve/Cloudreve/v4/pkg/searcher"
-	"github.com/cloudreve/Cloudreve/v4/pkg/searcher/extractor"
-	"github.com/cloudreve/Cloudreve/v4/pkg/searcher/indexer"
-	"github.com/cloudreve/Cloudreve/v4/pkg/setting"
-	"github.com/cloudreve/Cloudreve/v4/pkg/thumb"
-	"github.com/cloudreve/Cloudreve/v4/pkg/util"
+	"github.com/dadastory/CloudRevo/application/statics"
+	"github.com/dadastory/CloudRevo/ent"
+	"github.com/dadastory/CloudRevo/inventory"
+	"github.com/dadastory/CloudRevo/pkg/auth"
+	"github.com/dadastory/CloudRevo/pkg/cache"
+	"github.com/dadastory/CloudRevo/pkg/cluster"
+	"github.com/dadastory/CloudRevo/pkg/conf"
+	"github.com/dadastory/CloudRevo/pkg/credmanager"
+	"github.com/dadastory/CloudRevo/pkg/email"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/encrypt"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/eventhub"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/fs/mime"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/lock"
+	"github.com/dadastory/CloudRevo/pkg/hashid"
+	"github.com/dadastory/CloudRevo/pkg/logging"
+	"github.com/dadastory/CloudRevo/pkg/mediameta"
+	"github.com/dadastory/CloudRevo/pkg/queue"
+	"github.com/dadastory/CloudRevo/pkg/request"
+	"github.com/dadastory/CloudRevo/pkg/searcher"
+	"github.com/dadastory/CloudRevo/pkg/searcher/extractor"
+	"github.com/dadastory/CloudRevo/pkg/searcher/indexer"
+	"github.com/dadastory/CloudRevo/pkg/setting"
+	"github.com/dadastory/CloudRevo/pkg/thumb"
+	"github.com/dadastory/CloudRevo/pkg/util"
 	"github.com/gin-contrib/static"
 	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/robfig/cron/v3"
@@ -198,7 +198,6 @@ type dependency struct {
 	textExtractor         searcher.TextExtractor
 
 	configPath        string
-	isPro             bool
 	requiredDbVersion string
 
 	// Protects inner deps that can be reloaded at runtime.
@@ -317,7 +316,7 @@ func (d *dependency) ServerStaticFS() static.ServeFileSystem {
 		return d.serverStaticFS
 	}
 
-	sfs, err := statics.NewServerStaticFS(d.Logger(), d.Statics(), d.isPro)
+	sfs, err := statics.NewServerStaticFS(d.Logger(), d.Statics())
 	if err != nil {
 		d.panicError(err)
 	}
@@ -340,12 +339,7 @@ func (d *dependency) DBClient() *ent.Client {
 		d.rawEntClient = client
 	}
 
-	proSuffix := ""
-	if d.isPro {
-		proSuffix = "-pro"
-	}
-
-	client, err := inventory.InitializeDBClient(d.Logger(), d.rawEntClient, d.KV(), d.requiredDbVersion+proSuffix)
+	client, err := inventory.InitializeDBClient(d.Logger(), d.rawEntClient, d.KV(), d.requiredDbVersion)
 	if err != nil {
 		d.panicError(err)
 	}

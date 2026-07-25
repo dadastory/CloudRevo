@@ -7,16 +7,16 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cloudreve/Cloudreve/v4/application/constants"
-	"github.com/cloudreve/Cloudreve/v4/ent"
-	"github.com/cloudreve/Cloudreve/v4/inventory"
-	"github.com/cloudreve/Cloudreve/v4/inventory/types"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/fs"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/fs/dbfs"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/lock"
-	"github.com/cloudreve/Cloudreve/v4/pkg/serializer"
-	"github.com/cloudreve/Cloudreve/v4/pkg/setting"
-	"github.com/cloudreve/Cloudreve/v4/pkg/util"
+	"github.com/dadastory/CloudRevo/application/constants"
+	"github.com/dadastory/CloudRevo/ent"
+	"github.com/dadastory/CloudRevo/inventory"
+	"github.com/dadastory/CloudRevo/inventory/types"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/fs"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/fs/dbfs"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/lock"
+	"github.com/dadastory/CloudRevo/pkg/serializer"
+	"github.com/dadastory/CloudRevo/pkg/setting"
+	"github.com/dadastory/CloudRevo/pkg/util"
 	"github.com/samber/lo"
 )
 
@@ -96,7 +96,7 @@ func (m *manager) SharedAddressTranslation(ctx context.Context, path *fs.URI, op
 		opt.Apply(o)
 	}
 
-	return m.fs.SharedAddressTranslation(ctx, path)
+	return m.fs.SharedAddressTranslation(ctx, path, opts...)
 }
 
 func (m *manager) Create(ctx context.Context, path *fs.URI, fileType types.FileType, opts ...fs.Option) (fs.File, error) {
@@ -161,7 +161,7 @@ func (m *manager) SoftDelete(ctx context.Context, path ...*fs.URI) error {
 // It iterates through all pages of the trash listing and performs the deletion in
 // batches. Returns nil if the trash is already empty.
 func (m *manager) EmptyTrash(ctx context.Context) error {
-	trashUri, err := fs.NewUriFromString(fmt.Sprintf("%s://%s", constants.CloudreveScheme, constants.FileSystemTrash))
+	trashUri, err := fs.NewUriFromString(fmt.Sprintf("%s://%s", constants.CloudRevoScheme, constants.FileSystemTrash))
 	if err != nil {
 		return fmt.Errorf("failed to build trash uri: %w", err)
 	}
@@ -285,6 +285,10 @@ func (l *manager) Restore(ctx context.Context, path ...*fs.URI) error {
 }
 
 func (l *manager) CreateOrUpdateShare(ctx context.Context, path *fs.URI, args *CreateShareArgs) (*ent.Share, error) {
+	return l.CreateOrUpdateShareWithClient(ctx, path, args, l.dep.ShareClient())
+}
+
+func (l *manager) CreateOrUpdateShareWithClient(ctx context.Context, path *fs.URI, args *CreateShareArgs, shareClient inventory.ShareClient) (*ent.Share, error) {
 	file, err := l.fs.Get(ctx, path, dbfs.WithRequiredCapabilities(dbfs.NavigatorCapabilityShare), dbfs.WithNotRoot())
 	if err != nil {
 		return nil, serializer.NewError(serializer.CodeNotFound, "src file not found", err)
@@ -300,7 +304,6 @@ func (l *manager) CreateOrUpdateShare(ctx context.Context, path *fs.URI, args *C
 	}
 
 	var existed *ent.Share
-	shareClient := l.dep.ShareClient()
 	if args.ExistedShareID != 0 {
 		loadShareCtx := context.WithValue(ctx, inventory.LoadShareFile{}, true)
 		existed, err = shareClient.GetByID(loadShareCtx, args.ExistedShareID)
@@ -324,6 +327,7 @@ func (l *manager) CreateOrUpdateShare(ctx context.Context, path *fs.URI, args *C
 	props := &types.ShareProps{
 		ShareView:  args.ShareView,
 		ShowReadMe: args.ShowReadMe,
+		Default:    args.Default,
 	}
 
 	share, err := shareClient.Upsert(ctx, &inventory.CreateShareParams{
@@ -334,6 +338,7 @@ func (l *manager) CreateOrUpdateShare(ctx context.Context, path *fs.URI, args *C
 		RemainDownloads: args.RemainDownloads,
 		Existed:         existed,
 		Props:           props,
+		Default:         args.Default,
 	})
 
 	if err != nil {
@@ -378,6 +383,15 @@ func (m *manager) PatchView(ctx context.Context, uri *fs.URI, view *types.Explor
 	}
 
 	return nil
+}
+
+func (m *manager) PatchShareAccessRule(ctx context.Context, uri *fs.URI, rule *types.ShareAccessRule) error {
+	if rule != nil {
+		if err := rule.Validate(); err != nil {
+			return serializer.NewError(serializer.CodeParamErr, "invalid share access rule", err)
+		}
+	}
+	return m.fs.PatchShareAccessRule(ctx, uri, rule)
 }
 
 func getEntityDisplayName(f fs.File, e fs.Entity) string {

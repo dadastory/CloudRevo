@@ -10,9 +10,9 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/mixin"
-	gen "github.com/cloudreve/Cloudreve/v4/ent"
-	"github.com/cloudreve/Cloudreve/v4/ent/hook"
-	"github.com/cloudreve/Cloudreve/v4/ent/intercept"
+	gen "github.com/dadastory/CloudRevo/ent"
+	"github.com/dadastory/CloudRevo/ent/hook"
+	"github.com/dadastory/CloudRevo/ent/intercept"
 )
 
 // CommonMixin implements the soft delete pattern for schemas and common audit features.

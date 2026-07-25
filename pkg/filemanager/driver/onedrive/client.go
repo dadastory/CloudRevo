@@ -5,13 +5,13 @@ import (
 	"errors"
 	"io"
 
-	"github.com/cloudreve/Cloudreve/v4/ent"
-	"github.com/cloudreve/Cloudreve/v4/pkg/credmanager"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/fs"
-	"github.com/cloudreve/Cloudreve/v4/pkg/logging"
-	"github.com/cloudreve/Cloudreve/v4/pkg/setting"
+	"github.com/dadastory/CloudRevo/ent"
+	"github.com/dadastory/CloudRevo/pkg/credmanager"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/fs"
+	"github.com/dadastory/CloudRevo/pkg/logging"
+	"github.com/dadastory/CloudRevo/pkg/setting"
 
-	"github.com/cloudreve/Cloudreve/v4/pkg/request"
+	"github.com/dadastory/CloudRevo/pkg/request"
 )
 
 var (

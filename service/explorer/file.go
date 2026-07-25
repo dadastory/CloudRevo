@@ -7,20 +7,20 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/cloudreve/Cloudreve/v4/application/dependency"
-	"github.com/cloudreve/Cloudreve/v4/inventory"
-	"github.com/cloudreve/Cloudreve/v4/inventory/types"
-	"github.com/cloudreve/Cloudreve/v4/pkg/auth"
-	"github.com/cloudreve/Cloudreve/v4/pkg/cluster/routes"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/fs"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/fs/dbfs"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/manager"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/manager/entitysource"
-	"github.com/cloudreve/Cloudreve/v4/pkg/hashid"
-	"github.com/cloudreve/Cloudreve/v4/pkg/request"
-	"github.com/cloudreve/Cloudreve/v4/pkg/serializer"
-	"github.com/cloudreve/Cloudreve/v4/pkg/setting"
-	"github.com/cloudreve/Cloudreve/v4/pkg/util"
+	"github.com/dadastory/CloudRevo/application/dependency"
+	"github.com/dadastory/CloudRevo/inventory"
+	"github.com/dadastory/CloudRevo/inventory/types"
+	"github.com/dadastory/CloudRevo/pkg/auth"
+	"github.com/dadastory/CloudRevo/pkg/cluster/routes"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/fs"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/fs/dbfs"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/manager"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/manager/entitysource"
+	"github.com/dadastory/CloudRevo/pkg/hashid"
+	"github.com/dadastory/CloudRevo/pkg/request"
+	"github.com/dadastory/CloudRevo/pkg/serializer"
+	"github.com/dadastory/CloudRevo/pkg/setting"
+	"github.com/dadastory/CloudRevo/pkg/util"
 	"github.com/gin-gonic/gin"
 	"github.com/gofrs/uuid"
 	"github.com/samber/lo"
@@ -52,6 +52,33 @@ type (
 	}
 	ArchiveParamCtx struct{}
 )
+
+type (
+	PatchShareAccessRuleParameterCtx struct{}
+	PatchShareAccessRuleService      struct {
+		Uri        string           `json:"uri" binding:"required"`
+		AccessRule *ShareAccessRule `json:"access_rule"`
+	}
+)
+
+func (s *PatchShareAccessRuleService) Patch(c *gin.Context) error {
+	dep := dependency.FromContext(c)
+	user := inventory.UserFromContext(c)
+	m := manager.NewFileManager(dep, user)
+	defer m.Recycle()
+	uri, err := fs.NewUriFromString(s.Uri)
+	if err != nil {
+		return serializer.NewError(serializer.CodeParamErr, "unknown uri", err)
+	}
+	rule, err := s.AccessRule.ToInternal(dep.HashIDEncoder())
+	if err != nil {
+		return serializer.NewError(serializer.CodeParamErr, "invalid share access rule", err)
+	}
+	if err := m.PatchShareAccessRule(c, uri, rule); err != nil {
+		return err
+	}
+	return nil
+}
 
 // DownloadArchived 通过预签名 URL 打包下载
 func (service *ArchiveService) DownloadArchived(c *gin.Context) error {
@@ -653,7 +680,8 @@ func (s *GetFileInfoService) Get(c *gin.Context) (*FileResponse, error) {
 		return nil, serializer.NewError(serializer.CodeParamErr, "unknown uri", err)
 	}
 
-	opts := []fs.Option{dbfs.WithFilePublicMetadata(), dbfs.WithNotRoot()}
+	opts := []fs.Option{dbfs.WithFilePublicMetadata(), dbfs.WithNotRoot(),
+		dbfs.WithRequiredCapabilities(dbfs.NavigatorCapabilityInfo)}
 	if s.ExtendedInfo {
 		opts = append(opts, dbfs.WithExtendedInfo(), dbfs.WithEntityUser(), dbfs.WithFileShareIfOwned())
 	}

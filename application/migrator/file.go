@@ -7,10 +7,10 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/cloudreve/Cloudreve/v4/application/migrator/model"
-	"github.com/cloudreve/Cloudreve/v4/ent"
-	"github.com/cloudreve/Cloudreve/v4/inventory/types"
-	"github.com/cloudreve/Cloudreve/v4/pkg/conf"
+	"github.com/dadastory/CloudRevo/application/migrator/model"
+	"github.com/dadastory/CloudRevo/ent"
+	"github.com/dadastory/CloudRevo/inventory/types"
+	"github.com/dadastory/CloudRevo/pkg/conf"
 )
 
 func (m *Migrator) migrateFile() error {

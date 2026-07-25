@@ -5,8 +5,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/cloudreve/Cloudreve/v4/pkg/logging"
-	"github.com/cloudreve/Cloudreve/v4/pkg/util"
+	"github.com/dadastory/CloudRevo/pkg/logging"
+	"github.com/dadastory/CloudRevo/pkg/util"
 	"github.com/go-ini/ini"
 	"github.com/go-playground/validator/v10"
 )

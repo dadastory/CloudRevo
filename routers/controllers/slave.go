@@ -4,15 +4,15 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/cloudreve/Cloudreve/v4/pkg/cluster"
-	"github.com/cloudreve/Cloudreve/v4/pkg/downloader"
-	"github.com/cloudreve/Cloudreve/v4/pkg/downloader/slave"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/fs"
-	"github.com/cloudreve/Cloudreve/v4/pkg/request"
-	"github.com/cloudreve/Cloudreve/v4/pkg/serializer"
-	"github.com/cloudreve/Cloudreve/v4/service/admin"
-	"github.com/cloudreve/Cloudreve/v4/service/explorer"
-	"github.com/cloudreve/Cloudreve/v4/service/node"
+	"github.com/dadastory/CloudRevo/pkg/cluster"
+	"github.com/dadastory/CloudRevo/pkg/downloader"
+	"github.com/dadastory/CloudRevo/pkg/downloader/slave"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/fs"
+	"github.com/dadastory/CloudRevo/pkg/request"
+	"github.com/dadastory/CloudRevo/pkg/serializer"
+	"github.com/dadastory/CloudRevo/service/admin"
+	"github.com/dadastory/CloudRevo/service/explorer"
+	"github.com/dadastory/CloudRevo/service/node"
 	"github.com/gin-gonic/gin"
 )
 
@@ -143,7 +143,7 @@ func SlaveDownloadTaskCreate(c *gin.Context) {
 	c.JSON(200, serializer.NewResponseWithGobData(c, handle))
 }
 
-// SlaveDownloadTaskStatus 查询从机 Aria2 任务状态
+// SlaveDownloadTaskStatus 查询从机下载任务状态
 func SlaveDownloadTaskStatus(c *gin.Context) {
 	service := ParametersFromContext[*slave.GetSlaveDownload](c, node.GetSlaveDownloadTaskParamCtx{})
 	d := c.MustGet(downloader.DownloaderCtxKey).(downloader.Downloader)

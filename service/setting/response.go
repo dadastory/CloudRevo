@@ -1,10 +1,10 @@
 package setting
 
 import (
-	"github.com/cloudreve/Cloudreve/v4/ent"
-	"github.com/cloudreve/Cloudreve/v4/inventory"
-	"github.com/cloudreve/Cloudreve/v4/pkg/boolset"
-	"github.com/cloudreve/Cloudreve/v4/pkg/hashid"
+	"github.com/dadastory/CloudRevo/ent"
+	"github.com/dadastory/CloudRevo/inventory"
+	"github.com/dadastory/CloudRevo/pkg/boolset"
+	"github.com/dadastory/CloudRevo/pkg/hashid"
 	"github.com/samber/lo"
 	"time"
 )

@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/driver"
-	"github.com/cloudreve/Cloudreve/v4/pkg/mediameta"
-	"github.com/cloudreve/Cloudreve/v4/pkg/request"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/driver"
+	"github.com/dadastory/CloudRevo/pkg/mediameta"
+	"github.com/dadastory/CloudRevo/pkg/request"
 	"github.com/samber/lo"
 )
 

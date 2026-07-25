@@ -8,14 +8,14 @@ import (
 	"io"
 	"time"
 
-	"github.com/cloudreve/Cloudreve/v4/ent"
-	"github.com/cloudreve/Cloudreve/v4/inventory"
-	"github.com/cloudreve/Cloudreve/v4/inventory/types"
-	"github.com/cloudreve/Cloudreve/v4/pkg/boolset"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/lock"
-	"github.com/cloudreve/Cloudreve/v4/pkg/hashid"
-	"github.com/cloudreve/Cloudreve/v4/pkg/queue"
-	"github.com/cloudreve/Cloudreve/v4/pkg/serializer"
+	"github.com/dadastory/CloudRevo/ent"
+	"github.com/dadastory/CloudRevo/inventory"
+	"github.com/dadastory/CloudRevo/inventory/types"
+	"github.com/dadastory/CloudRevo/pkg/boolset"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/lock"
+	"github.com/dadastory/CloudRevo/pkg/hashid"
+	"github.com/dadastory/CloudRevo/pkg/queue"
+	"github.com/dadastory/CloudRevo/pkg/serializer"
 	"github.com/gofrs/uuid"
 )
 
@@ -99,6 +99,8 @@ type (
 		TraverseFile(ctx context.Context, fileID int) (File, error)
 		// PatchProps patches the props of a file.
 		PatchProps(ctx context.Context, uri *URI, props *types.FileProps, delete bool) error
+		// PatchShareAccessRule updates the share access rule of a file.
+		PatchShareAccessRule(ctx context.Context, uri *URI, rule *types.ShareAccessRule) error
 	}
 
 	UploadManager interface {
@@ -169,6 +171,8 @@ type (
 		Capabilities() *boolset.BooleanSet
 		IsRootFolder() bool
 		View() *types.ExplorerView
+		// ShareAccessRule returns a file-level share permission override.
+		ShareAccessRule() *types.ShareAccessRule
 	}
 
 	Entities []Entity

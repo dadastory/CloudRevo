@@ -2,13 +2,12 @@ package migrator
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
-	"github.com/cloudreve/Cloudreve/v4/application/migrator/model"
-	"github.com/cloudreve/Cloudreve/v4/ent/node"
-	"github.com/cloudreve/Cloudreve/v4/inventory/types"
-	"github.com/cloudreve/Cloudreve/v4/pkg/boolset"
+	"github.com/dadastory/CloudRevo/application/migrator/model"
+	"github.com/dadastory/CloudRevo/ent/node"
+	"github.com/dadastory/CloudRevo/inventory/types"
+	"github.com/dadastory/CloudRevo/pkg/boolset"
 )
 
 func (m *Migrator) migrateNode() error {
@@ -30,34 +29,7 @@ func (m *Migrator) migrateNode() error {
 		}
 
 		cap := &boolset.BooleanSet{}
-		settings := &types.NodeSetting{
-			Provider: types.DownloaderProviderAria2,
-		}
-
-		if n.Aria2Enabled {
-			boolset.Sets(map[types.NodeCapability]bool{
-				types.NodeCapabilityRemoteDownload: true,
-			}, cap)
-
-			aria2Options := &model.Aria2Option{}
-			if err := json.Unmarshal([]byte(n.Aria2Options), aria2Options); err != nil {
-				return fmt.Errorf("failed to unmarshal aria2 options: %w", err)
-			}
-
-			downloaderOptions := map[string]any{}
-			if aria2Options.Options != "" {
-				if err := json.Unmarshal([]byte(aria2Options.Options), &downloaderOptions); err != nil {
-					return fmt.Errorf("failed to unmarshal aria2 options: %w", err)
-				}
-			}
-
-			settings.Aria2Setting = &types.Aria2Setting{
-				Server:   aria2Options.Server,
-				Token:    aria2Options.Token,
-				Options:  downloaderOptions,
-				TempPath: aria2Options.TempPath,
-			}
-		}
+		settings := &types.NodeSetting{Provider: types.DownloaderProviderGopeed}
 
 		if n.Type == model.MasterNodeType {
 			boolset.Sets(map[types.NodeCapability]bool{

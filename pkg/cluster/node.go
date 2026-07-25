@@ -6,24 +6,24 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/cloudreve/Cloudreve/v4/application/constants"
-	"github.com/cloudreve/Cloudreve/v4/ent"
-	"github.com/cloudreve/Cloudreve/v4/ent/node"
-	"github.com/cloudreve/Cloudreve/v4/ent/task"
-	"github.com/cloudreve/Cloudreve/v4/inventory/types"
-	"github.com/cloudreve/Cloudreve/v4/pkg/auth"
-	"github.com/cloudreve/Cloudreve/v4/pkg/cluster/routes"
-	"github.com/cloudreve/Cloudreve/v4/pkg/conf"
-	"github.com/cloudreve/Cloudreve/v4/pkg/downloader"
-	"github.com/cloudreve/Cloudreve/v4/pkg/downloader/aria2"
-	"github.com/cloudreve/Cloudreve/v4/pkg/downloader/qbittorrent"
-	"github.com/cloudreve/Cloudreve/v4/pkg/downloader/slave"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/fs"
-	"github.com/cloudreve/Cloudreve/v4/pkg/logging"
-	"github.com/cloudreve/Cloudreve/v4/pkg/queue"
-	"github.com/cloudreve/Cloudreve/v4/pkg/request"
-	"github.com/cloudreve/Cloudreve/v4/pkg/serializer"
-	"github.com/cloudreve/Cloudreve/v4/pkg/setting"
+	"github.com/dadastory/CloudRevo/application/constants"
+	"github.com/dadastory/CloudRevo/ent"
+	"github.com/dadastory/CloudRevo/ent/node"
+	"github.com/dadastory/CloudRevo/ent/task"
+	"github.com/dadastory/CloudRevo/inventory/types"
+	"github.com/dadastory/CloudRevo/pkg/auth"
+	"github.com/dadastory/CloudRevo/pkg/cluster/routes"
+	"github.com/dadastory/CloudRevo/pkg/conf"
+	"github.com/dadastory/CloudRevo/pkg/downloader"
+	"github.com/dadastory/CloudRevo/pkg/downloader/gopeed"
+	"github.com/dadastory/CloudRevo/pkg/downloader/qbittorrent"
+	"github.com/dadastory/CloudRevo/pkg/downloader/slave"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/fs"
+	"github.com/dadastory/CloudRevo/pkg/logging"
+	"github.com/dadastory/CloudRevo/pkg/queue"
+	"github.com/dadastory/CloudRevo/pkg/request"
+	"github.com/dadastory/CloudRevo/pkg/serializer"
+	"github.com/dadastory/CloudRevo/pkg/setting"
 	"strconv"
 )
 
@@ -221,8 +221,8 @@ func (b *masterNode) CreateDownloader(ctx context.Context, c request.Client, set
 func NewDownloader(ctx context.Context, c request.Client, settings setting.Provider, options *types.NodeSetting) (downloader.Downloader, error) {
 	if options.Provider == types.DownloaderProviderQBittorrent {
 		return qbittorrent.NewClient(logging.FromContext(ctx), c, settings, options.QBittorrentSetting)
-	} else if options.Provider == types.DownloaderProviderAria2 {
-		return aria2.New(logging.FromContext(ctx), settings, options.Aria2Setting), nil
+	} else if options.Provider == types.DownloaderProviderGopeed {
+		return gopeed.New(options.GopeedSetting)
 	} else if options.Provider == "" {
 		return nil, errors.New("downloader not configured for this node")
 	} else {

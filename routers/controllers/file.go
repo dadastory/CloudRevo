@@ -1,9 +1,9 @@
 package controllers
 
 import (
-	"github.com/cloudreve/Cloudreve/v4/pkg/request"
-	"github.com/cloudreve/Cloudreve/v4/pkg/serializer"
-	"github.com/cloudreve/Cloudreve/v4/service/explorer"
+	"github.com/dadastory/CloudRevo/pkg/request"
+	"github.com/dadastory/CloudRevo/pkg/serializer"
+	"github.com/dadastory/CloudRevo/service/explorer"
 	"github.com/gin-gonic/gin"
 )
 
@@ -437,6 +437,16 @@ func PatchView(c *gin.Context) {
 		return
 	}
 
+	c.JSON(200, serializer.Response{})
+}
+
+func PatchShareAccessRule(c *gin.Context) {
+	service := ParametersFromContext[*explorer.PatchShareAccessRuleService](c, explorer.PatchShareAccessRuleParameterCtx{})
+	if err := service.Patch(c); err != nil {
+		c.JSON(200, serializer.Err(c, err))
+		c.Abort()
+		return
+	}
 	c.JSON(200, serializer.Response{})
 }
 

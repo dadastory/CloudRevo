@@ -9,8 +9,8 @@ import (
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
-	"github.com/cloudreve/Cloudreve/v4/ent/hook"
-	"github.com/cloudreve/Cloudreve/v4/inventory/types"
+	"github.com/dadastory/CloudRevo/ent/hook"
+	"github.com/dadastory/CloudRevo/inventory/types"
 )
 
 // File holds the schema definition for the File entity.

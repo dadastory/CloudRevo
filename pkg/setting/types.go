@@ -111,6 +111,7 @@ var (
 	CronTypeEntityCollect    = CronType("entity_collect")
 	CronTypeTrashBinCollect  = CronType("trash_bin_collect")
 	CronTypeOauthCredRefresh = CronType("oauth_cred_refresh")
+	CronTypeDefaultShareReconcile = CronType("default_share_reconcile")
 )
 
 type Theme struct {

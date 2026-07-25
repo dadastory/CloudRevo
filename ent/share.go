@@ -10,10 +10,10 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
-	"github.com/cloudreve/Cloudreve/v4/ent/file"
-	"github.com/cloudreve/Cloudreve/v4/ent/share"
-	"github.com/cloudreve/Cloudreve/v4/ent/user"
-	"github.com/cloudreve/Cloudreve/v4/inventory/types"
+	"github.com/dadastory/CloudRevo/ent/file"
+	"github.com/dadastory/CloudRevo/ent/share"
+	"github.com/dadastory/CloudRevo/ent/user"
+	"github.com/dadastory/CloudRevo/inventory/types"
 )
 
 // Share is the model entity for the Share schema.
@@ -37,6 +37,8 @@ type Share struct {
 	Expires *time.Time `json:"expires,omitempty"`
 	// RemainDownloads holds the value of the "remain_downloads" field.
 	RemainDownloads *int `json:"remain_downloads,omitempty"`
+	// IsDefault holds the value of the "is_default" field.
+	IsDefault bool `json:"is_default,omitempty"`
 	// Props holds the value of the "props" field.
 	Props *types.ShareProps `json:"props,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
@@ -91,6 +93,8 @@ func (*Share) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case share.FieldProps:
 			values[i] = new([]byte)
+		case share.FieldIsDefault:
+			values[i] = new(sql.NullBool)
 		case share.FieldID, share.FieldViews, share.FieldDownloads, share.FieldRemainDownloads:
 			values[i] = new(sql.NullInt64)
 		case share.FieldPassword:
@@ -172,6 +176,12 @@ func (s *Share) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				s.RemainDownloads = new(int)
 				*s.RemainDownloads = int(value.Int64)
+			}
+		case share.FieldIsDefault:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field is_default", values[i])
+			} else if value.Valid {
+				s.IsDefault = value.Bool
 			}
 		case share.FieldProps:
 			if value, ok := values[i].(*[]byte); !ok {
@@ -270,6 +280,9 @@ func (s *Share) String() string {
 		builder.WriteString("remain_downloads=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
+	builder.WriteString(", ")
+	builder.WriteString("is_default=")
+	builder.WriteString(fmt.Sprintf("%v", s.IsDefault))
 	builder.WriteString(", ")
 	builder.WriteString("props=")
 	builder.WriteString(fmt.Sprintf("%v", s.Props))

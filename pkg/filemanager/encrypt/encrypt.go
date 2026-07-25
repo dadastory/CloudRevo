@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/cloudreve/Cloudreve/v4/inventory/types"
+	"github.com/dadastory/CloudRevo/inventory/types"
 )
 
 type (

@@ -6,16 +6,16 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/cloudreve/Cloudreve/v4/application/constants"
-	"github.com/cloudreve/Cloudreve/v4/ent"
-	"github.com/cloudreve/Cloudreve/v4/inventory"
-	"github.com/cloudreve/Cloudreve/v4/inventory/types"
-	"github.com/cloudreve/Cloudreve/v4/pkg/boolset"
-	"github.com/cloudreve/Cloudreve/v4/pkg/cache"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/fs"
-	"github.com/cloudreve/Cloudreve/v4/pkg/hashid"
-	"github.com/cloudreve/Cloudreve/v4/pkg/serializer"
-	"github.com/cloudreve/Cloudreve/v4/pkg/setting"
+	"github.com/dadastory/CloudRevo/application/constants"
+	"github.com/dadastory/CloudRevo/ent"
+	"github.com/dadastory/CloudRevo/inventory"
+	"github.com/dadastory/CloudRevo/inventory/types"
+	"github.com/dadastory/CloudRevo/pkg/boolset"
+	"github.com/dadastory/CloudRevo/pkg/cache"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/fs"
+	"github.com/dadastory/CloudRevo/pkg/hashid"
+	"github.com/dadastory/CloudRevo/pkg/serializer"
+	"github.com/dadastory/CloudRevo/pkg/setting"
 	"github.com/samber/lo"
 )
 
@@ -540,21 +540,21 @@ func parseSearchPageToken(token string) (int, string, error) {
 }
 
 func newMyUri() *fs.URI {
-	res, _ := fs.NewUriFromString(constants.CloudreveScheme + "://" + string(constants.FileSystemMy))
+	res, _ := fs.NewUriFromString(constants.CloudRevoScheme + "://" + string(constants.FileSystemMy))
 	return res
 }
 
 func newMyIDUri(uid string) *fs.URI {
-	res, _ := fs.NewUriFromString(fmt.Sprintf("%s://%s@%s", constants.CloudreveScheme, uid, constants.FileSystemMy))
+	res, _ := fs.NewUriFromString(fmt.Sprintf("%s://%s@%s", constants.CloudRevoScheme, uid, constants.FileSystemMy))
 	return res
 }
 
 func newTrashUri(name string) *fs.URI {
-	res, _ := fs.NewUriFromString(fmt.Sprintf("%s://%s", constants.CloudreveScheme, constants.FileSystemTrash))
+	res, _ := fs.NewUriFromString(fmt.Sprintf("%s://%s", constants.CloudRevoScheme, constants.FileSystemTrash))
 	return res.Join(name)
 }
 
 func newSharedWithMeUri(id string) *fs.URI {
-	res, _ := fs.NewUriFromString(fmt.Sprintf("%s://%s", constants.CloudreveScheme, constants.FileSystemSharedWithMe))
+	res, _ := fs.NewUriFromString(fmt.Sprintf("%s://%s", constants.CloudRevoScheme, constants.FileSystemSharedWithMe))
 	return res.Join(id)
 }

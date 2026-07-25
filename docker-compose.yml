@@ -1,24 +1,49 @@
+name: cloudrevo
+
 services:
-  cloudreve:
-    image: cloudreve/cloudreve:latest
-    container_name: cloudreve-backend
+  test:
+    build:
+      context: .
+      target: test
+    profiles:
+      - test
+
+  frontend-test:
+    build:
+      context: .
+      target: frontend-test
+    profiles:
+      - test
+
+  cloudrevo:
+    build: .
+    container_name: cloudrevo-backend
     depends_on:
-      - postgresql
-      - redis
+      postgresql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      gopeed:
+        condition: service_healthy
     restart: unless-stopped
     ports:
       - 5212:5212
-      - 6888:6888
-      - 6888:6888/udp
     environment:
-      - CR_CONF_Database.Type=postgres
-      - CR_CONF_Database.Host=postgresql
-      - CR_CONF_Database.User=cloudreve
-      - CR_CONF_Database.Name=cloudreve
-      - CR_CONF_Database.Port=5432
-      - CR_CONF_Redis.Server=redis:6379
+      CR_CONF_Database.Type: "${CLOUDREVO_DB_TYPE:-postgres}"
+      CR_CONF_Database.Host: "${CLOUDREVO_DB_HOST:-postgresql}"
+      CR_CONF_Database.User: "${CLOUDREVO_DB_USER:-cloudrevo}"
+      CR_CONF_Database.Password: "${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env before starting Compose}"
+      CR_CONF_Database.Name: "${CLOUDREVO_DB_NAME:-cloudrevo}"
+      CR_CONF_Database.Port: "${CLOUDREVO_DB_PORT:-5432}"
+      CR_CONF_Redis.Server: "${CLOUDREVO_REDIS_SERVER:-redis:6379}"
+      CR_GOPEED_API_TOKEN: "${GOPEED_API_TOKEN:?Set GOPEED_API_TOKEN in .env before starting Compose}"
+      CR_SETTING_DEFAULT_thumb_ffmpeg_enabled: "${CR_SETTING_DEFAULT_thumb_ffmpeg_enabled:-1}"
+      CR_SETTING_DEFAULT_thumb_vips_enabled: "${CR_SETTING_DEFAULT_thumb_vips_enabled:-1}"
+      CR_SETTING_DEFAULT_thumb_libreoffice_enabled: "${CR_SETTING_DEFAULT_thumb_libreoffice_enabled:-1}"
+      CR_SETTING_DEFAULT_media_meta_ffprobe: "${CR_SETTING_DEFAULT_media_meta_ffprobe:-1}"
+      CR_SETTING_DEFAULT_thumb_libraw_enabled: "${CR_SETTING_DEFAULT_thumb_libraw_enabled:-1}"
     volumes:
-      - backend_data:/cloudreve/data
+      - ./storage/cloudrevo:/cloudrevo/data
 
   postgresql:
     # Best practice: Pin to major version. 
@@ -28,20 +53,44 @@ services:
     container_name: postgresql
     restart: unless-stopped
     environment:
-      - POSTGRES_USER=cloudreve
-      - POSTGRES_DB=cloudreve
-      - POSTGRES_HOST_AUTH_METHOD=trust
+      POSTGRES_USER: "${CLOUDREVO_DB_USER:-cloudrevo}"
+      POSTGRES_DB: "${CLOUDREVO_DB_NAME:-cloudrevo}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env before starting Compose}"
     volumes:
-      - database_postgres:/var/lib/postgresql/data
+      - ./storage/postgresql:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
 
   redis:
     image: redis:latest
     container_name: redis
     restart: unless-stopped
     volumes:
-      - redis_data:/data
+      - ./storage/redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
 
-volumes:
-  backend_data:
-  database_postgres:
-  redis_data:
+  gopeed:
+    build:
+      context: .
+      dockerfile: .build/gopeed.Dockerfile
+      args:
+        VERSION: v1.9.3
+    container_name: gopeed
+    restart: unless-stopped
+    environment:
+      GOPEED_APITOKEN: "${GOPEED_API_TOKEN:?Set GOPEED_API_TOKEN in .env before starting Compose}"
+    volumes:
+      - ./storage/gopeed:/app/storage
+      - ./storage/cloudrevo/temp/gopeed:/app/Downloads
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null --header=\"X-Api-Token: $$GOPEED_APITOKEN\" http://127.0.0.1:9999/api/v1/info"]
+      interval: 5s
+      timeout: 5s
+      retries: 12

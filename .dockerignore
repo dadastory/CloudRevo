@@ -1,0 +1,10 @@
+.git
+.codex
+openspec
+data
+postgresql
+redis
+storage
+assets/node_modules
+assets/build
+cloudrevo

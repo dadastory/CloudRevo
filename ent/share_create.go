@@ -11,10 +11,10 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/cloudreve/Cloudreve/v4/ent/file"
-	"github.com/cloudreve/Cloudreve/v4/ent/share"
-	"github.com/cloudreve/Cloudreve/v4/ent/user"
-	"github.com/cloudreve/Cloudreve/v4/inventory/types"
+	"github.com/dadastory/CloudRevo/ent/file"
+	"github.com/dadastory/CloudRevo/ent/share"
+	"github.com/dadastory/CloudRevo/ent/user"
+	"github.com/dadastory/CloudRevo/inventory/types"
 )
 
 // ShareCreate is the builder for creating a Share entity.
@@ -137,6 +137,20 @@ func (sc *ShareCreate) SetNillableRemainDownloads(i *int) *ShareCreate {
 	return sc
 }
 
+// SetIsDefault sets the "is_default" field.
+func (sc *ShareCreate) SetIsDefault(b bool) *ShareCreate {
+	sc.mutation.SetIsDefault(b)
+	return sc
+}
+
+// SetNillableIsDefault sets the "is_default" field if the given value is not nil.
+func (sc *ShareCreate) SetNillableIsDefault(b *bool) *ShareCreate {
+	if b != nil {
+		sc.SetIsDefault(*b)
+	}
+	return sc
+}
+
 // SetProps sets the "props" field.
 func (sc *ShareCreate) SetProps(tp *types.ShareProps) *ShareCreate {
 	sc.mutation.SetProps(tp)
@@ -240,6 +254,10 @@ func (sc *ShareCreate) defaults() error {
 		v := share.DefaultDownloads
 		sc.mutation.SetDownloads(v)
 	}
+	if _, ok := sc.mutation.IsDefault(); !ok {
+		v := share.DefaultIsDefault
+		sc.mutation.SetIsDefault(v)
+	}
 	return nil
 }
 
@@ -256,6 +274,9 @@ func (sc *ShareCreate) check() error {
 	}
 	if _, ok := sc.mutation.Downloads(); !ok {
 		return &ValidationError{Name: "downloads", err: errors.New(`ent: missing required field "Share.downloads"`)}
+	}
+	if _, ok := sc.mutation.IsDefault(); !ok {
+		return &ValidationError{Name: "is_default", err: errors.New(`ent: missing required field "Share.is_default"`)}
 	}
 	return nil
 }
@@ -322,6 +343,10 @@ func (sc *ShareCreate) createSpec() (*Share, *sqlgraph.CreateSpec) {
 	if value, ok := sc.mutation.RemainDownloads(); ok {
 		_spec.SetField(share.FieldRemainDownloads, field.TypeInt, value)
 		_node.RemainDownloads = &value
+	}
+	if value, ok := sc.mutation.IsDefault(); ok {
+		_spec.SetField(share.FieldIsDefault, field.TypeBool, value)
+		_node.IsDefault = value
 	}
 	if value, ok := sc.mutation.Props(); ok {
 		_spec.SetField(share.FieldProps, field.TypeJSON, value)
@@ -539,6 +564,18 @@ func (u *ShareUpsert) ClearRemainDownloads() *ShareUpsert {
 	return u
 }
 
+// SetIsDefault sets the "is_default" field.
+func (u *ShareUpsert) SetIsDefault(v bool) *ShareUpsert {
+	u.Set(share.FieldIsDefault, v)
+	return u
+}
+
+// UpdateIsDefault sets the "is_default" field to the value that was provided on create.
+func (u *ShareUpsert) UpdateIsDefault() *ShareUpsert {
+	u.SetExcluded(share.FieldIsDefault)
+	return u
+}
+
 // SetProps sets the "props" field.
 func (u *ShareUpsert) SetProps(v *types.ShareProps) *ShareUpsert {
 	u.Set(share.FieldProps, v)
@@ -746,6 +783,20 @@ func (u *ShareUpsertOne) UpdateRemainDownloads() *ShareUpsertOne {
 func (u *ShareUpsertOne) ClearRemainDownloads() *ShareUpsertOne {
 	return u.Update(func(s *ShareUpsert) {
 		s.ClearRemainDownloads()
+	})
+}
+
+// SetIsDefault sets the "is_default" field.
+func (u *ShareUpsertOne) SetIsDefault(v bool) *ShareUpsertOne {
+	return u.Update(func(s *ShareUpsert) {
+		s.SetIsDefault(v)
+	})
+}
+
+// UpdateIsDefault sets the "is_default" field to the value that was provided on create.
+func (u *ShareUpsertOne) UpdateIsDefault() *ShareUpsertOne {
+	return u.Update(func(s *ShareUpsert) {
+		s.UpdateIsDefault()
 	})
 }
 
@@ -1130,6 +1181,20 @@ func (u *ShareUpsertBulk) UpdateRemainDownloads() *ShareUpsertBulk {
 func (u *ShareUpsertBulk) ClearRemainDownloads() *ShareUpsertBulk {
 	return u.Update(func(s *ShareUpsert) {
 		s.ClearRemainDownloads()
+	})
+}
+
+// SetIsDefault sets the "is_default" field.
+func (u *ShareUpsertBulk) SetIsDefault(v bool) *ShareUpsertBulk {
+	return u.Update(func(s *ShareUpsert) {
+		s.SetIsDefault(v)
+	})
+}
+
+// UpdateIsDefault sets the "is_default" field to the value that was provided on create.
+func (u *ShareUpsertBulk) UpdateIsDefault() *ShareUpsertBulk {
+	return u.Update(func(s *ShareUpsert) {
+		s.UpdateIsDefault()
 	})
 }
 

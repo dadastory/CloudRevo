@@ -5,20 +5,20 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/cloudreve/Cloudreve/v4/application/dependency"
-	"github.com/cloudreve/Cloudreve/v4/inventory/types"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/manager"
-	"github.com/cloudreve/Cloudreve/v4/pkg/hashid"
-	"github.com/cloudreve/Cloudreve/v4/pkg/util"
-	"github.com/cloudreve/Cloudreve/v4/pkg/wopi"
+	"github.com/dadastory/CloudRevo/application/dependency"
+	"github.com/dadastory/CloudRevo/inventory/types"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/manager"
+	"github.com/dadastory/CloudRevo/pkg/hashid"
+	"github.com/dadastory/CloudRevo/pkg/util"
+	"github.com/dadastory/CloudRevo/pkg/wopi"
 	"github.com/gin-gonic/gin"
 )
 
 // WopiWriteAccess validates if write access is obtained.
 func WopiWriteAccess() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		session := c.MustGet(wopi.WopiSessionCtx).(*wopi.SessionCache)
-		if session.Action != wopi.ActionEdit {
+		viewerSession := manager.ViewerSessionFromContext(c)
+		if viewerSession.Action != types.ViewerActionEdit {
 			c.Status(http.StatusNotFound)
 			c.Header(wopi.ServerErrorHeader, "read-only access")
 			c.Abort()

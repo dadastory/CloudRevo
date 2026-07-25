@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cloudreve/Cloudreve/v4/pkg/serializer"
+	"github.com/dadastory/CloudRevo/pkg/serializer"
 )
 
 // HMACAuth HMAC算法鉴权

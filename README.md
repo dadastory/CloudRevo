@@ -1,76 +1,60 @@
-[中文版本](https://github.com/cloudreve/cloudreve/blob/master/README_zh-CN.md)
-
-<h1 align="center">
-  <br>
-  <a href="https://cloudreve.org/" alt="logo" ><img src="https://raw.githubusercontent.com/cloudreve/frontend/master/public/static/img/logo192.png" width="150"/></a>
-  <br>
-  Cloudreve
-  <br>
-</h1>
-<h4 align="center">Self-hosted file management system with multi-cloud support.</h4>
-
 <p align="center">
-  <a href="https://dev.azure.com/abslantliu/cloudreve/_build?definitionId=6">
-    <img src="https://img.shields.io/github/check-runs/cloudreve/cloudreve/master"
-         alt="Azure pipelines">
-  </a>
-  <a href="https://github.com/cloudreve/cloudreve/releases">
-    <img src="https://img.shields.io/github/v/release/cloudreve/cloudreve?include_prereleases" />
-  </a>
-  <a href="https://github.com/cloudreve/cloudreve/releases">
-     <img src="https://badgen.net/static/release%20size/34%20MB/blue"/>
-  </a>
-  <a href="https://hub.docker.com/r/cloudreve/cloudreve">
-  <img alt="Docker Pulls" src="https://img.shields.io/docker/pulls/cloudreve/cloudreve" />
-  </a>
-</p>
-<p align="center">
-  <a href="https://cloudreve.org">Homepage</a> •
-  <a href="https://demo.cloudreve.org">Try it</a> •
-  <a href="https://github.com/cloudreve/cloudreve/discussions">Discussion</a> •
-  <a href="https://docs.cloudreve.org">Documents</a> •
-  <a href="https://github.com/cloudreve/cloudreve/releases">Download</a> •
-  <a href="https://t.me/cloudreve_official">Telegram</a> •
-  <a href="https://discord.com/invite/WTpMFpZT76">Discord</a>
+  <img src="assets/public/static/img/logo.svg" width="280" alt="CloudRevo">
 </p>
 
-![Screenshot](https://raw.githubusercontent.com/cloudreve/docs/master/images/homepage.png)
+<p align="center">Fast, self-hosted file storage with permissions, sharing, and offline downloads.</p>
 
-## :sparkles: Features
+<p align="center">
+  <a href="LICENSE">GPL-3.0</a> ·
+  <a href="https://github.com/dadastory/CloudRevo/issues">Report an issue</a>
+</p>
 
-- :cloud: Support storing files into Local, Remote node, OneDrive, S3 compatible API, Qiniu Kodo, Aliyun OSS, Tencent COS, Huawei Cloud OBS, Kingsoft Cloud KS3, Upyun.
-- :outbox_tray: Upload/Download in directly transmission from client to storage providers.
-- 💾 Integrate with Aria2/qBittorrent to download files in background, use multiple download nodes to share the load.
-- 📚 Compress/Extract/Preview archived files, download files in batch.
-- 💻 WebDAV support covering all storage providers.
-- :zap:Drag&Drop to upload files or folders, with parallel resumable upload support.
-- :card_file_box: Extract media metadata from files, search files by metadata or tags.
-- :family_woman_girl_boy: Multi-users with multi-groups.
-- :link: Create share links for files and folders with expiration date.
-- :eye_speech_bubble: Preview videos, images, audios, ePub files online; edit texts, diagrams, Markdown, images, Office documents online.
-- :art: Customize theme colors, dark mode, PWA application, SPA, i18n.
-- :rocket: All-in-one packaging, with all features out of the box.
-- 🌈 ... ...
+## What is included
 
-## :hammer_and_wrench: Deploy
+- **File permissions** — view, create, modify, and delete rules for users, groups, anonymous visitors, and other users.
+- **Share management** — file and folder shares, multiple links, default shares for new users, and link administration.
+- **Gopeed offline downloads** — preflight inspection, file selection, headers, retries, batch actions, live progress, and per-task connection settings. Aria2 is not included.
 
-To deploy Cloudreve, you can refer to [Getting started](https://docs.cloudreve.org/overview/quickstart) for a quick local deployment to test.
+## TODO
 
-When you're ready to deploy Cloudreve to a production environment, you can refer to [Deploy](https://docs.cloudreve.org/overview/deploy/) for a complete deployment.
+- [ ] OnlyOffice collaboration
+- [ ] Real-time collaboration indicators
+- [ ] Desktop sync support
+- [ ] Deployment and API documentation
+- [ ] More integration tests
 
-## :gear: Build
+## Start locally
 
-Please refer to [Build](https://docs.cloudreve.org/overview/build/) for how to build Cloudreve from source code.
+CloudRevo builds its application images locally. Persistent data is stored in `./storage/`.
 
-## :rocket: Contributing
+```bash
+cp .env.example .env
+# Set POSTGRES_PASSWORD and GOPEED_API_TOKEN in .env.
+docker compose up --build
+```
 
-If you're interested in contributing to Cloudreve, please refer to [Contributing](https://docs.cloudreve.org/api/contributing/) for how to contribute to Cloudreve.
+## One-click deployment
 
-## :alembic: Stacks
+This pulls published CloudRevo images and keeps all data in the current directory. It does not execute a remote script.
 
-- [Go](https://golang.org/) + [Gin](https://github.com/gin-gonic/gin) + [ent](https://github.com/ent/ent)
-- [React](https://github.com/facebook/react) + [Redux](https://github.com/reduxjs/redux) + [Material-UI](https://github.com/mui-org/material-ui)
+```bash
+mkdir -p cloudrevo && cd cloudrevo && curl -fsSLO https://raw.githubusercontent.com/dadastory/CloudRevo/main/docker-compose.yaml && umask 077 && { printf 'POSTGRES_PASSWORD=%s\n' "$(openssl rand -hex 32)"; printf 'GOPEED_API_TOKEN=%s\n' "$(openssl rand -hex 32)"; } > .env && docker compose up -d
+```
 
-## :scroll: License
+## Feedback and disclaimer
 
-GPL V3
+This project is under active development. If something is broken, incomplete, or unsafe, please open an [issue](https://github.com/dadastory/CloudRevo/issues) with steps to reproduce it. Security-sensitive reports should follow [SECURITY.md](SECURITY.md).
+
+CloudRevo is provided **as is**, without warranty. You are responsible for backups, access-control configuration, data handling, and compliance with laws that apply to your use.
+
+## Acknowledgements
+
+CloudRevo exists because of these projects:
+
+- [Cloudreve](https://github.com/cloudreve/Cloudreve) provides the GPL-3.0 file-storage foundation from which CloudRevo is derived.
+- [Gopeed](https://github.com/GopeedLab/gopeed) provides the offline-download engine. CloudRevo maintains its integration at [dadastory/gopeed](https://github.com/dadastory/gopeed).
+- [Casbin](https://github.com/casbin/casbin) provides the authorization model and policy-enforcement foundation for file permissions.
+
+## Licence
+
+CloudRevo is a modified derivative of Cloudreve, released under [GPL-3.0](LICENSE), and is not an official Cloudreve release.

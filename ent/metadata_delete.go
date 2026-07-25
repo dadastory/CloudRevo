@@ -8,8 +8,8 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/cloudreve/Cloudreve/v4/ent/metadata"
-	"github.com/cloudreve/Cloudreve/v4/ent/predicate"
+	"github.com/dadastory/CloudRevo/ent/metadata"
+	"github.com/dadastory/CloudRevo/ent/predicate"
 )
 
 // MetadataDelete is the builder for deleting a Metadata entity.

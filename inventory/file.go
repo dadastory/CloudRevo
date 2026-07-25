@@ -6,17 +6,17 @@ import (
 	"time"
 
 	"entgo.io/ent/dialect/sql"
-	"github.com/cloudreve/Cloudreve/v4/ent"
-	"github.com/cloudreve/Cloudreve/v4/ent/directlink"
-	"github.com/cloudreve/Cloudreve/v4/ent/entity"
-	"github.com/cloudreve/Cloudreve/v4/ent/file"
-	"github.com/cloudreve/Cloudreve/v4/ent/metadata"
-	"github.com/cloudreve/Cloudreve/v4/ent/predicate"
-	"github.com/cloudreve/Cloudreve/v4/ent/schema"
-	"github.com/cloudreve/Cloudreve/v4/ent/share"
-	"github.com/cloudreve/Cloudreve/v4/inventory/types"
-	"github.com/cloudreve/Cloudreve/v4/pkg/conf"
-	"github.com/cloudreve/Cloudreve/v4/pkg/hashid"
+	"github.com/dadastory/CloudRevo/ent"
+	"github.com/dadastory/CloudRevo/ent/directlink"
+	"github.com/dadastory/CloudRevo/ent/entity"
+	"github.com/dadastory/CloudRevo/ent/file"
+	"github.com/dadastory/CloudRevo/ent/metadata"
+	"github.com/dadastory/CloudRevo/ent/predicate"
+	"github.com/dadastory/CloudRevo/ent/schema"
+	"github.com/dadastory/CloudRevo/ent/share"
+	"github.com/dadastory/CloudRevo/inventory/types"
+	"github.com/dadastory/CloudRevo/pkg/conf"
+	"github.com/dadastory/CloudRevo/pkg/hashid"
 	"github.com/gofrs/uuid"
 	"github.com/samber/lo"
 	"golang.org/x/tools/container/intsets"
@@ -236,6 +236,12 @@ type FileClient interface {
 	UpdateModifiedAt(ctx context.Context, file *ent.File, modifiedAt time.Time) error
 	// DeleteAllMetadataByName deletes all metadata by a given name
 	DeleteAllMetadataByName(ctx context.Context, name string) error
+	// DeleteSymbolicFoldersByMetadata removes symbolic folders carrying one exact
+	// metadata value. It is used to reconcile server-managed shortcuts.
+	DeleteSymbolicFoldersByMetadata(ctx context.Context, name, value string) error
+	// DeleteSymbolicFoldersByMetadataForOwner removes matching symbolic folders
+	// for one recipient without scanning or affecting other recipients.
+	DeleteSymbolicFoldersByMetadataForOwner(ctx context.Context, ownerID int, name, value string) error
 }
 
 func NewFileClient(client *ent.Client, dbType conf.DBType, hasher hashid.Encoder) FileClient {
@@ -327,6 +333,32 @@ func (f *fileClient) DeleteAllMetadataByName(ctx context.Context, name string) e
 		return fmt.Errorf("failed to delete metadata: %w", err)
 	}
 
+	return nil
+}
+
+func (f *fileClient) DeleteSymbolicFoldersByMetadata(ctx context.Context, name, value string) error {
+	return f.deleteSymbolicFoldersByMetadata(ctx, 0, name, value)
+}
+
+func (f *fileClient) DeleteSymbolicFoldersByMetadataForOwner(ctx context.Context, ownerID int, name, value string) error {
+	return f.deleteSymbolicFoldersByMetadata(ctx, ownerID, name, value)
+}
+
+func (f *fileClient) deleteSymbolicFoldersByMetadata(ctx context.Context, ownerID int, name, value string) error {
+	query := f.client.File.Query().Where(file.IsSymbolic(true), file.HasMetadataWith(metadata.Name(name), metadata.Value(value)))
+	if ownerID > 0 {
+		query.Where(file.OwnerID(ownerID))
+	}
+	files, err := query.WithEntities().All(ctx)
+	if err != nil {
+		return fmt.Errorf("find symbolic folders by metadata: %w", err)
+	}
+	if len(files) == 0 {
+		return nil
+	}
+	if _, _, err := f.Delete(ctx, files, nil); err != nil {
+		return fmt.Errorf("delete symbolic folders by metadata: %w", err)
+	}
 	return nil
 }
 

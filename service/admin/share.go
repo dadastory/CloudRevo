@@ -4,13 +4,18 @@ import (
 	"context"
 	"strconv"
 	"strings"
+	"time"
 
-	"github.com/cloudreve/Cloudreve/v4/application/dependency"
-	"github.com/cloudreve/Cloudreve/v4/ent"
-	"github.com/cloudreve/Cloudreve/v4/inventory"
-	"github.com/cloudreve/Cloudreve/v4/pkg/cluster/routes"
-	"github.com/cloudreve/Cloudreve/v4/pkg/hashid"
-	"github.com/cloudreve/Cloudreve/v4/pkg/serializer"
+	"github.com/dadastory/CloudRevo/application/dependency"
+	"github.com/dadastory/CloudRevo/ent"
+	"github.com/dadastory/CloudRevo/inventory"
+	"github.com/dadastory/CloudRevo/inventory/types"
+	"github.com/dadastory/CloudRevo/pkg/cluster/routes"
+	"github.com/dadastory/CloudRevo/pkg/defaultshare"
+	"github.com/dadastory/CloudRevo/pkg/hashid"
+	"github.com/dadastory/CloudRevo/pkg/serializer"
+	shareservice "github.com/dadastory/CloudRevo/service/share"
+	userservice "github.com/dadastory/CloudRevo/service/user"
 	"github.com/gin-gonic/gin"
 	"github.com/samber/lo"
 )
@@ -142,6 +147,83 @@ func (s *SingleShareService) Get(c *gin.Context) (*GetShareResponse, error) {
 	}, nil
 }
 
+type DefaultShareService struct {
+	Default bool `json:"default"`
+}
+
+type DefaultShareParamCtx struct{}
+
+// SetDefault changes only the administrator-managed onboarding marker. It
+// deliberately does not reuse the owner-scoped share editor.
+func (s *DefaultShareService) SetDefault(c *gin.Context, shareID int) error {
+	dep := dependency.FromContext(c)
+	shareCtx := context.WithValue(c, inventory.LoadShareFile{}, true)
+	shareCtx = context.WithValue(shareCtx, inventory.LoadShareUser{}, true)
+	share, err := dep.ShareClient().GetByID(shareCtx, shareID)
+	if err != nil {
+		return serializer.NewError(serializer.CodeNotFound, "share not found", err)
+	}
+	if s.Default {
+		if share.Password != "" {
+			return serializer.NewError(serializer.CodeParamErr, "Default shares cannot require a password", nil)
+		}
+		if err := inventory.IsValidShare(share); err != nil {
+			return serializer.NewError(serializer.CodeParamErr, "Default shares must be valid", err)
+		}
+	}
+	var defaultShareTx *ent.Tx
+	if s.Default && !share.IsDefault {
+		defaultShareTx, err = shareservice.ReserveDefaultShareSlot(c, dep)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = defaultShareTx.Rollback() }()
+
+		// Lock the candidate row before reloading its edges. This keeps a
+		// concurrent owner update from changing validity between the check and
+		// the default-marker write.
+		if _, err := defaultShareTx.Share.UpdateOneID(share.ID).SetUpdatedAt(time.Now()).Save(c); err != nil {
+			return serializer.NewError(serializer.CodeDBError, "failed to lock default share candidate", err)
+		}
+		transactionalShares := inventory.NewShareClient(defaultShareTx.Client(), dep.ConfigProvider().Database().Type, dep.HashIDEncoder())
+		share, err = transactionalShares.GetByID(shareCtx, shareID)
+		if err != nil {
+			return serializer.NewError(serializer.CodeNotFound, "share not found", err)
+		}
+		if share.Password != "" {
+			return serializer.NewError(serializer.CodeParamErr, "Default shares cannot require a password", nil)
+		}
+		if err := inventory.IsValidShare(share); err != nil {
+			return serializer.NewError(serializer.CodeParamErr, "Default shares must be valid", err)
+		}
+	}
+	props := share.Props
+	if props == nil {
+		props = &types.ShareProps{}
+	}
+	props.Default = s.Default
+	shareWriter := dep.ShareClient().GetClient().Share
+	if defaultShareTx != nil {
+		shareWriter = defaultShareTx.Share
+	}
+	updated, err := shareWriter.UpdateOneID(share.ID).SetIsDefault(s.Default).SetProps(props).Save(c)
+	if err != nil {
+		return serializer.NewError(serializer.CodeDBError, "failed to update default share", err)
+	}
+	if defaultShareTx != nil {
+		if err := defaultShareTx.Commit(); err != nil {
+			return serializer.NewError(serializer.CodeDBError, "failed to reserve default share slot", err)
+		}
+	}
+	if s.Default {
+		if err := defaultshare.Restart(dep.KV(), updated.ID); err != nil {
+			return serializer.NewError(serializer.CodeCacheOperation, "failed to restart default-share reconciliation", err)
+		}
+		return nil
+	}
+	return userservice.CleanupDefaultShareShortcuts(c, dep, updated)
+}
+
 type (
 	BatchShareService struct {
 		ShareIDs []int `json:"ids" binding:"required"`
@@ -152,7 +234,16 @@ type (
 func (s *BatchShareService) Delete(c *gin.Context) error {
 	dep := dependency.FromContext(c)
 	shareClient := dep.ShareClient()
+	shares, err := shareClient.GetByIDs(c, s.ShareIDs)
+	if err != nil {
+		return serializer.NewError(serializer.CodeDBError, "Failed to load shares", err)
+	}
 
+	for _, share := range shares {
+		if err := userservice.CleanupDefaultShareShortcuts(c, dep, share); err != nil {
+			return serializer.NewError(serializer.CodeDBError, "Failed to clean up default share shortcuts", err)
+		}
+	}
 	if err := shareClient.DeleteBatch(c, s.ShareIDs); err != nil {
 		return serializer.NewError(serializer.CodeDBError, "Failed to delete shares", err)
 	}

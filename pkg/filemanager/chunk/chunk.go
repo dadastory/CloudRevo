@@ -6,11 +6,11 @@ import (
 	"io"
 	"os"
 
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/chunk/backoff"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/fs"
-	"github.com/cloudreve/Cloudreve/v4/pkg/logging"
-	"github.com/cloudreve/Cloudreve/v4/pkg/request"
-	"github.com/cloudreve/Cloudreve/v4/pkg/util"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/chunk/backoff"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/fs"
+	"github.com/dadastory/CloudRevo/pkg/logging"
+	"github.com/dadastory/CloudRevo/pkg/request"
+	"github.com/dadastory/CloudRevo/pkg/util"
 )
 
 const bufferTempPattern = "cdChunk.*.tmp"

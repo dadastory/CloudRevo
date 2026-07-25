@@ -8,11 +8,11 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/cloudreve/Cloudreve/v4/ent"
-	"github.com/cloudreve/Cloudreve/v4/ent/setting"
-	"github.com/cloudreve/Cloudreve/v4/inventory/types"
-	"github.com/cloudreve/Cloudreve/v4/pkg/cache"
-	"github.com/cloudreve/Cloudreve/v4/pkg/util"
+	"github.com/dadastory/CloudRevo/ent"
+	"github.com/dadastory/CloudRevo/ent/setting"
+	"github.com/dadastory/CloudRevo/inventory/types"
+	"github.com/dadastory/CloudRevo/pkg/cache"
+	"github.com/dadastory/CloudRevo/pkg/util"
 	"github.com/gofrs/uuid"
 )
 
@@ -485,26 +485,26 @@ var mailTemplateContents = []MailTemplateContent{
 
 var DefaultSettings = map[string]string{
 	"siteURL":                                    `http://localhost:5212`,
-	"siteName":                                   `Cloudreve`,
-	"siteDes":                                    "Cloudreve",
+	"siteName":                                   `CloudRevo`,
+	"siteDes":                                    "CloudRevo",
 	"siteID":                                     uuid.Must(uuid.NewV4()).String(),
 	"siteTitle":                                  "Cloud storage for everyone",
 	"siteScript":                                 "",
-	"pwa_small_icon":                             "/static/img/favicon.ico",
-	"pwa_medium_icon":                            "/static/img/logo192.png",
-	"pwa_large_icon":                             "/static/img/logo512.png",
+	"pwa_small_icon":                             "/static/img/cloudrevo.svg",
+	"pwa_medium_icon":                            "/static/img/cloudrevo.svg",
+	"pwa_large_icon":                             "/static/img/cloudrevo.svg",
 	"pwa_display":                                "standalone",
 	"pwa_theme_color":                            "#000000",
 	"pwa_background_color":                       "#ffffff",
 	"register_enabled":                           `1`,
 	"default_group":                              `2`,
-	"fromName":                                   `Cloudreve`,
+	"fromName":                                   `CloudRevo`,
 	"mail_keepalive":                             `30`,
-	"fromAdress":                                 `no-reply@cloudreve.org`,
-	"smtpHost":                                   `smtp.cloudreve.com`,
+	"fromAdress":                                 `no-reply@example.com`,
+	"smtpHost":                                   `smtp.example.com`,
 	"smtpPort":                                   `25`,
-	"replyTo":                                    `support@cloudreve.org`,
-	"smtpUser":                                   `smtp.cloudreve.com`,
+	"replyTo":                                    `support@example.com`,
+	"smtpUser":                                   `smtp.example.com`,
 	"smtpPass":                                   ``,
 	"smtpEncryption":                             `0`,
 	"ban_time":                                   `604800`,
@@ -532,6 +532,7 @@ var DefaultSettings = map[string]string{
 	"cron_entity_collect":                        "@every 15m",
 	"cron_trash_bin_collect":                     "@every 33m",
 	"cron_oauth_cred_refresh":                    "@every 230h",
+	"cron_default_share_reconcile":               "@every 15m",
 	"authn_enabled":                              "1",
 	"captcha_type":                               "normal",
 	"captcha_height":                             "60",
@@ -643,8 +644,8 @@ var DefaultSettings = map[string]string{
 	"media_meta_geocoding_mapbox_ak":             "",
 	"site_logo":                                  "/static/img/logo.svg",
 	"site_logo_light":                            "/static/img/logo_light.svg",
-	"tos_url":                                    "https://cloudreve.org/privacy-policy",
-	"privacy_policy_url":                         "https://cloudreve.org/privacy-policy",
+	"tos_url":                                    "",
+	"privacy_policy_url":                         "",
 	"explorer_category_image_query":              "type=file&case_folding&use_or&name=*.bmp&name=*.iff&name=*.png&name=*.gif&name=*.jpg&name=*.jpeg&name=*.psd&name=*.svg&name=*.webp&name=*.heif&name=*.heic&name=*.tiff&name=*.avif&name=*.3fr&name=*.ari&name=*.arw&name=*.bay&name=*.braw&name=*.crw&name=*.cr2&name=*.cr3&name=*.cap&name=*.dcs&name=*.dcr&name=*.dng&name=*.drf&name=*.eip&name=*.erf&name=*.fff&name=*.gpr&name=*.iiq&name=*.k25&name=*.kdc&name=*.mdc&name=*.mef&name=*.mos&name=*.mrw&name=*.nef&name=*.nrw&name=*.obm&name=*.orf&name=*.pef&name=*.ptx&name=*.pxn&name=*.r3d&name=*.raf&name=*.raw&name=*.rwl&name=*.rw2&name=*.rwz&name=*.sr2&name=*.srf&name=*.srw&name=*.tif&name=*.x3f",
 	"explorer_category_video_query":              "type=file&case_folding&use_or&name=*.mp4&name=*.m3u8&name=*.flv&name=*.avi&name=*.wmv&name=*.mkv&name=*.rm&name=*.rmvb&name=*.mov&name=*.ogv",
 	"explorer_category_audio_query":              "type=file&case_folding&use_or&name=*.mp3&name=*.flac&name=*.ape&name=*.wav&name=*.acc&name=*.ogg&name=*.m4a",
@@ -659,7 +660,6 @@ var DefaultSettings = map[string]string{
 	"logto_config":                               `{"direct_sign_in":true,"display_name":"vas.sso"}`,
 	"qq_login":                                   `0`,
 	"qq_login_config":                            `{"direct_sign_in":false}`,
-	"license":                                    "",
 	"custom_nav_items":                           "[]",
 	"headless_footer_html":                       "",
 	"headless_bottom_html":                       "",

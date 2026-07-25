@@ -22,17 +22,17 @@ type Group struct {
 
 // GroupOption 用户组其他配置
 type GroupOption struct {
-	ArchiveDownload  bool                   `json:"archive_download,omitempty"` // 打包下载
-	ArchiveTask      bool                   `json:"archive_task,omitempty"`     // 在线压缩
-	CompressSize     uint64                 `json:"compress_size,omitempty"`    // 可压缩大小
-	DecompressSize   uint64                 `json:"decompress_size,omitempty"`
-	OneTimeDownload  bool                   `json:"one_time_download,omitempty"`
-	ShareDownload    bool                   `json:"share_download,omitempty"`
-	Aria2            bool                   `json:"aria2,omitempty"`         // 离线下载
-	Aria2Options     map[string]interface{} `json:"aria2_options,omitempty"` // 离线下载用户组配置
-	SourceBatchSize  int                    `json:"source_batch,omitempty"`
-	RedirectedSource bool                   `json:"redirected_source,omitempty"`
-	Aria2BatchSize   int                    `json:"aria2_batch,omitempty"`
-	AdvanceDelete    bool                   `json:"advance_delete,omitempty"`
-	WebDAVProxy      bool                   `json:"webdav_proxy,omitempty"`
+	ArchiveDownload         bool                   `json:"archive_download,omitempty"` // 打包下载
+	ArchiveTask             bool                   `json:"archive_task,omitempty"`     // 在线压缩
+	CompressSize            uint64                 `json:"compress_size,omitempty"`    // 可压缩大小
+	DecompressSize          uint64                 `json:"decompress_size,omitempty"`
+	OneTimeDownload         bool                   `json:"one_time_download,omitempty"`
+	ShareDownload           bool                   `json:"share_download,omitempty"`
+	RemoteDownload          bool                   `json:"remote_download,omitempty"`
+	RemoteDownloadOptions   map[string]interface{} `json:"remote_download_options,omitempty"`
+	SourceBatchSize         int                    `json:"source_batch,omitempty"`
+	RedirectedSource        bool                   `json:"redirected_source,omitempty"`
+	RemoteDownloadBatchSize int                    `json:"remote_download_batch,omitempty"`
+	AdvanceDelete           bool                   `json:"advance_delete,omitempty"`
+	WebDAVProxy             bool                   `json:"webdav_proxy,omitempty"`
 }

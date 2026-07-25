@@ -3,16 +3,16 @@ package dependency
 import (
 	"io/fs"
 
-	"github.com/cloudreve/Cloudreve/v4/ent"
-	"github.com/cloudreve/Cloudreve/v4/inventory"
-	"github.com/cloudreve/Cloudreve/v4/pkg/auth"
-	"github.com/cloudreve/Cloudreve/v4/pkg/cache"
-	"github.com/cloudreve/Cloudreve/v4/pkg/conf"
-	"github.com/cloudreve/Cloudreve/v4/pkg/email"
-	"github.com/cloudreve/Cloudreve/v4/pkg/hashid"
-	"github.com/cloudreve/Cloudreve/v4/pkg/logging"
-	"github.com/cloudreve/Cloudreve/v4/pkg/searcher"
-	"github.com/cloudreve/Cloudreve/v4/pkg/setting"
+	"github.com/dadastory/CloudRevo/ent"
+	"github.com/dadastory/CloudRevo/inventory"
+	"github.com/dadastory/CloudRevo/pkg/auth"
+	"github.com/dadastory/CloudRevo/pkg/cache"
+	"github.com/dadastory/CloudRevo/pkg/conf"
+	"github.com/dadastory/CloudRevo/pkg/email"
+	"github.com/dadastory/CloudRevo/pkg/hashid"
+	"github.com/dadastory/CloudRevo/pkg/logging"
+	"github.com/dadastory/CloudRevo/pkg/searcher"
+	"github.com/dadastory/CloudRevo/pkg/setting"
 	"github.com/gin-contrib/static"
 )
 
@@ -59,13 +59,6 @@ func WithStatics(c fs.FS) Option {
 func WithServerStaticFS(c static.ServeFileSystem) Option {
 	return optionFunc(func(o *dependency) {
 		o.serverStaticFS = c
-	})
-}
-
-// WithProFlag Set if current instance is a pro version.
-func WithProFlag(c bool) Option {
-	return optionFunc(func(o *dependency) {
-		o.isPro = c
 	})
 }
 

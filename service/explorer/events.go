@@ -1,15 +1,19 @@
 package explorer
 
 import (
+	"context"
 	"time"
 
-	"github.com/cloudreve/Cloudreve/v4/application/dependency"
-	"github.com/cloudreve/Cloudreve/v4/inventory"
-	"github.com/cloudreve/Cloudreve/v4/pkg/auth/requestinfo"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/fs"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/manager"
-	"github.com/cloudreve/Cloudreve/v4/pkg/logging"
-	"github.com/cloudreve/Cloudreve/v4/pkg/serializer"
+	"github.com/dadastory/CloudRevo/application/constants"
+	"github.com/dadastory/CloudRevo/application/dependency"
+	"github.com/dadastory/CloudRevo/ent"
+	"github.com/dadastory/CloudRevo/inventory"
+	"github.com/dadastory/CloudRevo/pkg/auth/requestinfo"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/fs"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/fs/dbfs"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/manager"
+	"github.com/dadastory/CloudRevo/pkg/logging"
+	"github.com/dadastory/CloudRevo/pkg/serializer"
 	"github.com/gin-gonic/gin"
 	"github.com/gofrs/uuid"
 )
@@ -48,6 +52,10 @@ func (s *ExplorerEventService) HandleExplorerEventsPush(c *gin.Context) error {
 	// Subscribing to that folder topic would leak events about unshared siblings.
 	if listRes != nil && listRes.SingleFileView {
 		return serializer.NewError(serializer.CodeNoPermissionErr, "Event subscriptions are not supported on this view", nil)
+	}
+	if uri.FileSystem() == constants.FileSystemShare &&
+		!parent.Capabilities().Enabled(int(dbfs.NavigatorCapabilityVersionControl)) {
+		return serializer.NewError(serializer.CodeNoPermissionErr, "Update permission is required to view shared activity", nil)
 	}
 
 	requestInfo := requestinfo.RequestInfoFromContext(c)
@@ -102,6 +110,16 @@ func (s *ExplorerEventService) HandleExplorerEventsPush(c *gin.Context) error {
 				l.Debug("Event hub closed, disconnecting client")
 				return nil
 			}
+			// A share's ACL can change while an SSE request is open. Recreate the
+			// file manager for each event so no navigator state, link rule, or
+			// descendant rule from the original subscription is reused. A deleted
+			// or now-denied object terminates the stream rather than leaking even
+			// its name through an event payload.
+			if uri.FileSystem() == constants.FileSystemShare && !canReceiveSharedEvent(c, dep, user, uri, evt.From) {
+				eventHub.Unsubscribe(c, parent.ID(), requestInfo.ClientID)
+				l.Debug("Shared event permission changed, unsubscribed from event hub")
+				return nil
+			}
 			c.SSEvent("event", evt)
 			l.Debug("Event sent: %+v", evt)
 			c.Writer.Flush()
@@ -112,8 +130,28 @@ func (s *ExplorerEventService) HandleExplorerEventsPush(c *gin.Context) error {
 				return nil
 			}
 		case <-keepAliveTicker.C:
+			if uri.FileSystem() == constants.FileSystemShare && !canReceiveSharedEvent(c, dep, user, uri, "/") {
+				eventHub.Unsubscribe(c, parent.ID(), requestInfo.ClientID)
+				l.Debug("Shared activity permission changed, unsubscribed from event hub")
+				return nil
+			}
 			c.SSEvent("keep-alive", nil)
 			c.Writer.Flush()
 		}
 	}
+}
+
+func canReceiveSharedEvent(c *gin.Context, dep dependency.Dep, user *ent.User, root *fs.URI, relativePath string) bool {
+	// Reload the recipient and its group relationship as well as the share
+	// itself. Otherwise an in-memory group change could keep an old grant alive
+	// for the lifetime of this long-running HTTP request.
+	freshUser, err := dep.UserClient().GetByID(context.WithValue(c, inventory.LoadUserGroup{}, true), user.ID)
+	if err != nil {
+		return false
+	}
+	m := manager.NewFileManager(dep, freshUser)
+	defer m.Recycle()
+	_, err = m.Get(c, root.JoinRaw(relativePath),
+		dbfs.WithRequiredCapabilities(dbfs.NavigatorCapabilityVersionControl))
+	return err == nil
 }

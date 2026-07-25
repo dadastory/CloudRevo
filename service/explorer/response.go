@@ -8,19 +8,19 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/cloudreve/Cloudreve/v4/application/dependency"
-	"github.com/cloudreve/Cloudreve/v4/ent"
-	"github.com/cloudreve/Cloudreve/v4/inventory"
-	"github.com/cloudreve/Cloudreve/v4/inventory/types"
-	"github.com/cloudreve/Cloudreve/v4/pkg/auth"
-	"github.com/cloudreve/Cloudreve/v4/pkg/boolset"
-	"github.com/cloudreve/Cloudreve/v4/pkg/cluster/routes"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/fs"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/manager"
-	"github.com/cloudreve/Cloudreve/v4/pkg/hashid"
-	"github.com/cloudreve/Cloudreve/v4/pkg/queue"
-	"github.com/cloudreve/Cloudreve/v4/pkg/util"
-	"github.com/cloudreve/Cloudreve/v4/service/user"
+	"github.com/dadastory/CloudRevo/application/dependency"
+	"github.com/dadastory/CloudRevo/ent"
+	"github.com/dadastory/CloudRevo/inventory"
+	"github.com/dadastory/CloudRevo/inventory/types"
+	"github.com/dadastory/CloudRevo/pkg/auth"
+	"github.com/dadastory/CloudRevo/pkg/boolset"
+	"github.com/dadastory/CloudRevo/pkg/cluster/routes"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/fs"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/manager"
+	"github.com/dadastory/CloudRevo/pkg/hashid"
+	"github.com/dadastory/CloudRevo/pkg/queue"
+	"github.com/dadastory/CloudRevo/pkg/util"
+	"github.com/dadastory/CloudRevo/service/user"
 	"github.com/gin-gonic/gin"
 	"github.com/gofrs/uuid"
 	"github.com/samber/lo"
@@ -272,6 +272,7 @@ type FileResponse struct {
 	Capability    *boolset.BooleanSet `json:"capability,omitempty"`
 	Owned         bool                `json:"owned,omitempty"`
 	PrimaryEntity string              `json:"primary_entity,omitempty"`
+	AccessRule    *ShareAccessRule    `json:"access_rule,omitempty"`
 
 	FolderSummary *fs.FolderSummary `json:"folder_summary,omitempty"`
 	ExtendedInfo  *ExtendedInfo     `json:"extended_info,omitempty"`
@@ -338,6 +339,7 @@ type Share struct {
 	IsPrivate bool   `json:"is_private,omitempty"`
 	Password  string `json:"password,omitempty"`
 	ShareView bool   `json:"share_view,omitempty"`
+	Default   bool   `json:"default,omitempty"`
 
 	// Only viewable if explicitly unlocked by owner
 	SourceUri string `json:"source_uri,omitempty"`
@@ -377,6 +379,7 @@ func BuildShare(ctx context.Context, s *ent.Share, base *url.URL, hasher hashid.
 	if requester.ID == owner.ID {
 		res.IsPrivate = s.Password != ""
 		res.ShareView = s.Props != nil && s.Props.ShareView
+		res.Default = s.Props != nil && s.Props.Default
 	}
 
 	return &res
@@ -425,12 +428,25 @@ func BuildFileResponse(ctx context.Context, u *ent.User, f fs.File, hasher hashi
 		Path:          f.Uri(false).String(),
 		Shared:        f.Shared(),
 		Capability:    cap,
-		Owned:         owner == nil || owner.ID == u.ID,
+		Owned:         owner == nil || (u != nil && owner.ID == u.ID),
 		FolderSummary: f.FolderSummary(),
 		ExtendedInfo:  BuildExtendedInfo(ctx, u, f, hasher),
 		PrimaryEntity: hashid.EncodeEntityID(hasher, f.PrimaryEntityID()),
 	}
+	if canManageFileAccessRule(u, owner) {
+		res.AccessRule = BuildShareAccessRule(f.ShareAccessRule(), hasher)
+	}
 	return res
+}
+
+func canManageFileAccessRule(user, owner *ent.User) bool {
+	if owner == nil {
+		return true
+	}
+	if user == nil {
+		return false
+	}
+	return owner.ID == user.ID || (user.Edges.Group != nil && user.Edges.Group.Permissions.Enabled(int(types.GroupPermissionIsAdmin)))
 }
 
 func BuildExtendedInfo(ctx context.Context, u *ent.User, f fs.File, hasher hashid.Encoder) *ExtendedInfo {

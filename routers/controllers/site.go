@@ -1,10 +1,10 @@
 package controllers
 
 import (
-	"github.com/cloudreve/Cloudreve/v4/application/constants"
-	"github.com/cloudreve/Cloudreve/v4/application/dependency"
-	"github.com/cloudreve/Cloudreve/v4/pkg/serializer"
-	"github.com/cloudreve/Cloudreve/v4/service/basic"
+	"github.com/dadastory/CloudRevo/application/constants"
+	"github.com/dadastory/CloudRevo/application/dependency"
+	"github.com/dadastory/CloudRevo/pkg/serializer"
+	"github.com/dadastory/CloudRevo/service/basic"
 	"github.com/gin-gonic/gin"
 )
 
@@ -26,14 +26,9 @@ func SiteConfig(c *gin.Context) {
 
 // Ping 状态检查页面
 func Ping(c *gin.Context) {
-	version := constants.BackendVersion
-	if constants.IsProBool {
-		version += "-pro"
-	}
-
 	c.JSON(200, serializer.Response{
 		Code: 0,
-		Data: version,
+		Data: constants.BackendVersion,
 	})
 }
 

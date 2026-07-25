@@ -7,7 +7,7 @@
 
 ## Reporting a Vulnerability
 
-Please report security vulnerabilities privately through GitHub's [Security Advisories](https://github.com/cloudreve/Cloudreve/security/advisories/new) by opening a new draft advisory in this repository.
+Please report security vulnerabilities privately through GitHub's [Security Advisories](https://github.com/dadastory/CloudRevo/security/advisories/new) by opening a new draft advisory in this repository.
 
 Please do not report security vulnerabilities through public GitHub issues, discussions, or pull requests.
 

@@ -7,14 +7,14 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/cloudreve/Cloudreve/v4/pkg/logging"
-	"github.com/cloudreve/Cloudreve/v4/pkg/searcher"
-	"github.com/cloudreve/Cloudreve/v4/pkg/setting"
+	"github.com/dadastory/CloudRevo/pkg/logging"
+	"github.com/dadastory/CloudRevo/pkg/searcher"
+	"github.com/dadastory/CloudRevo/pkg/setting"
 	"github.com/meilisearch/meilisearch-go"
 )
 
 const (
-	indexName         = "cloudreve_files"
+	indexName         = "cloudrevo_files"
 	embedderName      = "cr-text"
 	embeddingTemplate = "Chunk #{{doc.chunk_idx}} in a file named '{{doc.file_name}}': {{ doc.text }}"
 )

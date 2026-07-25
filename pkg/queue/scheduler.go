@@ -2,7 +2,7 @@ package queue
 
 import (
 	"errors"
-	"github.com/cloudreve/Cloudreve/v4/pkg/logging"
+	"github.com/dadastory/CloudRevo/pkg/logging"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -23,6 +23,8 @@ type (
 		Queue(task Task) error
 		// Request get a new Task from the queue
 		Request() (Task, error)
+		// Remove drops a waiting task without executing it.
+		Remove(taskID int) (bool, error)
 		// Shutdown stop all worker
 		Shutdown() error
 	}
@@ -76,6 +78,23 @@ func (s *fifoScheduler) Request() (Task, error) {
 	s.Unlock()
 
 	return data.(Task), nil
+}
+
+func (s *fifoScheduler) Remove(taskID int) (bool, error) {
+	if atomic.LoadInt32(&s.stopFlag) == 1 {
+		return false, ErrQueueShutdown
+	}
+	s.Lock()
+	defer s.Unlock()
+	for index := len(s.taskQueue) - 1; index >= 0; index-- {
+		queued := s.taskQueue[index]
+		if queued != nil && queued.ID() == taskID {
+			s.taskQueue = append(s.taskQueue[:index], s.taskQueue[index+1:]...)
+			s.count--
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // Shutdown the worker

@@ -6,7 +6,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/cloudreve/Cloudreve/v4/ent"
+	"github.com/dadastory/CloudRevo/ent"
 )
 
 // The DavAccountFunc type is an adapter to allow the use of ordinary

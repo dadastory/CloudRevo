@@ -4,10 +4,10 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/cloudreve/Cloudreve/v4/application/constants"
-	"github.com/cloudreve/Cloudreve/v4/application/dependency"
-	"github.com/cloudreve/Cloudreve/v4/application/migrator"
-	"github.com/cloudreve/Cloudreve/v4/pkg/util"
+	"github.com/dadastory/CloudRevo/application/constants"
+	"github.com/dadastory/CloudRevo/application/dependency"
+	"github.com/dadastory/CloudRevo/application/migrator"
+	"github.com/dadastory/CloudRevo/pkg/util"
 	"github.com/spf13/cobra"
 )
 
@@ -29,7 +29,6 @@ var migrateCmd = &cobra.Command{
 		dep := dependency.NewDependency(
 			dependency.WithConfigPath(confPath),
 			dependency.WithRequiredDbVersion(constants.BackendVersion),
-			dependency.WithProFlag(constants.IsPro == "true"),
 		)
 		logger := dep.Logger()
 		logger.Info("Migrating from v3 to v4...")

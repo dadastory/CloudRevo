@@ -7,7 +7,7 @@ import (
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
-	"github.com/cloudreve/Cloudreve/v4/ent/predicate"
+	"github.com/dadastory/CloudRevo/ent/predicate"
 )
 
 // ID filters vertices based on their ID field.
@@ -93,6 +93,11 @@ func Expires(v time.Time) predicate.Share {
 // RemainDownloads applies equality check predicate on the "remain_downloads" field. It's identical to RemainDownloadsEQ.
 func RemainDownloads(v int) predicate.Share {
 	return predicate.Share(sql.FieldEQ(FieldRemainDownloads, v))
+}
+
+// IsDefault applies equality check predicate on the "is_default" field. It's identical to IsDefaultEQ.
+func IsDefault(v bool) predicate.Share {
+	return predicate.Share(sql.FieldEQ(FieldIsDefault, v))
 }
 
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.
@@ -478,6 +483,16 @@ func RemainDownloadsIsNil() predicate.Share {
 // RemainDownloadsNotNil applies the NotNil predicate on the "remain_downloads" field.
 func RemainDownloadsNotNil() predicate.Share {
 	return predicate.Share(sql.FieldNotNull(FieldRemainDownloads))
+}
+
+// IsDefaultEQ applies the EQ predicate on the "is_default" field.
+func IsDefaultEQ(v bool) predicate.Share {
+	return predicate.Share(sql.FieldEQ(FieldIsDefault, v))
+}
+
+// IsDefaultNEQ applies the NEQ predicate on the "is_default" field.
+func IsDefaultNEQ(v bool) predicate.Share {
+	return predicate.Share(sql.FieldNEQ(FieldIsDefault, v))
 }
 
 // PropsIsNil applies the IsNil predicate on the "props" field.

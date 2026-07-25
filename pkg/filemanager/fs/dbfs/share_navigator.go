@@ -4,17 +4,17 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/cloudreve/Cloudreve/v4/application/constants"
-	"github.com/cloudreve/Cloudreve/v4/ent"
-	"github.com/cloudreve/Cloudreve/v4/inventory"
-	"github.com/cloudreve/Cloudreve/v4/inventory/types"
-	"github.com/cloudreve/Cloudreve/v4/pkg/boolset"
-	"github.com/cloudreve/Cloudreve/v4/pkg/cache"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/fs"
-	"github.com/cloudreve/Cloudreve/v4/pkg/hashid"
-	"github.com/cloudreve/Cloudreve/v4/pkg/logging"
-	"github.com/cloudreve/Cloudreve/v4/pkg/serializer"
-	"github.com/cloudreve/Cloudreve/v4/pkg/setting"
+	"github.com/dadastory/CloudRevo/application/constants"
+	"github.com/dadastory/CloudRevo/ent"
+	"github.com/dadastory/CloudRevo/inventory"
+	"github.com/dadastory/CloudRevo/inventory/types"
+	"github.com/dadastory/CloudRevo/pkg/boolset"
+	"github.com/dadastory/CloudRevo/pkg/cache"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/fs"
+	"github.com/dadastory/CloudRevo/pkg/hashid"
+	"github.com/dadastory/CloudRevo/pkg/logging"
+	"github.com/dadastory/CloudRevo/pkg/serializer"
+	"github.com/dadastory/CloudRevo/pkg/setting"
 )
 
 var (
@@ -70,30 +70,12 @@ type (
 )
 
 func (n *shareNavigator) PersistState(kv cache.Driver, key string) {
-	n.disableRecycle = true
-	n.persist = func() {
-		kv.Set(key, shareNavigatorState{
-			ShareRoot:       n.shareRoot,
-			OwnerRoot:       n.ownerRoot,
-			SingleFileShare: n.singleFileShare,
-			Share:           n.share,
-			Owner:           n.owner,
-		}, ContextHintTTL)
-	}
+	// Share state includes the active access rule. It must be loaded for every
+	// request so a revoked permission cannot survive in a Context Hint cache.
 }
 
 func (n *shareNavigator) RestoreState(s State) error {
-	n.disableRecycle = true
-	if state, ok := s.(shareNavigatorState); ok {
-		n.shareRoot = state.ShareRoot
-		n.ownerRoot = state.OwnerRoot
-		n.singleFileShare = state.SingleFileShare
-		n.share = state.Share
-		n.owner = state.Owner
-		return nil
-	}
-
-	return fmt.Errorf("invalid state type: %T", s)
+	return fmt.Errorf("share navigator state cannot be restored from Context Hint")
 }
 
 func (n *shareNavigator) Recycle() {
@@ -112,6 +94,7 @@ func (n *shareNavigator) Recycle() {
 }
 
 func (n *shareNavigator) Root(ctx context.Context, path *fs.URI) (*File, error) {
+	n.singleFileShare = false
 	ctx = context.WithValue(ctx, inventory.LoadShareUser{}, true)
 	ctx = context.WithValue(ctx, inventory.LoadUserGroup{}, true)
 	ctx = context.WithValue(ctx, inventory.LoadShareFile{}, true)
@@ -125,13 +108,15 @@ func (n *shareNavigator) Root(ctx context.Context, path *fs.URI) (*File, error) 
 	}
 
 	n.owner = share.Edges.User
+	n.share = share
 
 	// Check password
 	if share.Password != "" && share.Password != path.Password() {
 		return nil, ErrShareIncorrectPassword
 	}
 
-	// Share permission setting should overwrite root folder's permission
+	// File and folder permissions are global. The source object's rule is the
+	// only rule that governs a share root; link settings never carry an ACL.
 	n.shareRoot = newFile(nil, share.Edges.File)
 
 	// Find the user side root of the file.
@@ -174,8 +159,83 @@ func (n *shareNavigator) Root(ctx context.Context, path *fs.URI) (*File, error) 
 
 	n.ownerRoot = ownerRoot
 	n.ownerRoot.Path[pathIndexRoot] = newMyIDUri(hashid.EncodeUserID(n.hasher, n.owner.ID))
-	n.share = share
 	return n.shareRoot, nil
+}
+
+func (n *shareNavigator) accessPermission() types.SharePermission {
+	if n.share == nil {
+		return types.SharePermission{}
+	}
+
+	if n.share.Edges.File != nil && n.share.Edges.File.Props != nil && n.share.Edges.File.Props.ShareAccessRule != nil {
+		return n.resolveAccessRule(n.share.Edges.File.Props.ShareAccessRule)
+	}
+	return types.SharePermission{Read: true}
+}
+
+func (n *shareNavigator) resolveAccessRule(rule *types.ShareAccessRule) types.SharePermission {
+	groupID := 0
+	if n.user != nil && n.user.Edges.Group != nil {
+		groupID = n.user.Edges.Group.ID
+	}
+
+	return rule.Resolve(n.user.ID, groupID, inventory.IsAnonymousUser(n.user))
+}
+
+// accessPermissionFor applies the closest configured object rule. A child
+// rule replaces its ancestor's rule, so a directory owner can grant a more
+// specific capability without duplicating the source rule on every child.
+func (n *shareNavigator) accessPermissionFor(file *File) types.SharePermission {
+	for current := file; current != nil && current != n.shareRoot; current = current.Parent {
+		if current.Model != nil && n.share != nil && n.share.Edges.File != nil &&
+			n.share.Edges.File.ID != 0 && current.Model.ID == n.share.Edges.File.ID {
+			continue
+		}
+		if current.Model != nil && current.Model.Props != nil && current.Model.Props.ShareAccessRule != nil {
+			return n.resolveAccessRule(current.Model.Props.ShareAccessRule)
+		}
+	}
+	return n.accessPermission()
+}
+
+func (n *shareNavigator) capabilitiesFor(file *File) *boolset.BooleanSet {
+	permission := n.accessPermissionFor(file)
+	capability := boolset.BooleanSet(append([]byte(nil), (*shareNavigatorCapability)...))
+	boolset.Sets(map[NavigatorCapability]bool{
+		NavigatorCapabilityListChildren:   permission.Read,
+		NavigatorCapabilityDownloadFile:   permission.Read,
+		NavigatorCapabilityGenerateThumb:  permission.Read,
+		NavigatorCapabilityInfo:           permission.Read,
+		NavigatorCapabilityEnterFolder:    permission.Read,
+		NavigatorCapabilityLockFile:       false,
+		NavigatorCapabilityCreateFile:     permission.Create && !n.singleFileShare,
+		NavigatorCapabilityUploadFile:     permission.Create && !n.singleFileShare,
+		NavigatorCapabilityRenameFile:     permission.Update && !n.singleFileShare,
+		NavigatorCapabilityUpdateMetadata: permission.Update,
+		NavigatorCapabilityDeleteFile:     permission.Delete && !n.singleFileShare,
+		NavigatorCapabilitySoftDelete:     permission.Delete && !n.singleFileShare,
+		NavigatorCapabilityVersionControl: permission.Update,
+		NavigatorCapabilityModifyProps:    permission.Update,
+	}, &capability)
+
+	return &capability
+}
+
+func (n *shareNavigator) allows(file *File, capability NavigatorCapability) bool {
+	return n.capabilitiesFor(file).Enabled(int(capability))
+}
+
+func (n *shareNavigator) ensureAccess(ctx context.Context, path *fs.URI, capabilities ...NavigatorCapability) error {
+	target, err := n.To(ctx, path)
+	if err != nil && target == nil {
+		return err
+	}
+	for _, capability := range capabilities {
+		if !n.allows(target, capability) {
+			return ErrPermissionDenied
+		}
+	}
+	return nil
 }
 
 func (n *shareNavigator) To(ctx context.Context, path *fs.URI) (*File, error) {
@@ -202,6 +262,7 @@ func (n *shareNavigator) To(ctx context.Context, path *fs.URI) (*File, error) {
 			return nil, fs.ErrPathNotExist
 		}
 
+		file.CapabilitiesBs = n.capabilitiesFor(file)
 		return file, nil
 	}
 
@@ -214,6 +275,7 @@ func (n *shareNavigator) To(ctx context.Context, path *fs.URI) (*File, error) {
 		}
 	}
 
+	current.CapabilitiesBs = n.capabilitiesFor(current)
 	return current, nil
 }
 
@@ -223,6 +285,7 @@ func (n *shareNavigator) walkNext(ctx context.Context, root *File, next string, 
 		return nil, err
 	}
 
+	nextFile.CapabilitiesBs = n.capabilitiesFor(nextFile)
 	return nextFile, nil
 }
 
@@ -240,7 +303,26 @@ func (n *shareNavigator) Children(ctx context.Context, parent *File, args *ListA
 		}, nil
 	}
 
-	return n.baseNavigator.children(ctx, parent, args)
+	return paginateVisibleChildren(args, func(pageArgs *ListArgs) (*ListResult, error) {
+		return n.baseNavigator.children(ctx, parent, pageArgs)
+	}, func(file *File) bool {
+		return len(filterReadableShareChildren(n, []*File{file})) == 1
+	})
+}
+
+// filterReadableShareChildren applies the disclosure boundary before a file is
+// returned to an API response. Empty capabilities are not sufficient because a
+// directory listing itself exposes a child name and metadata.
+func filterReadableShareChildren(n *shareNavigator, files []*File) []*File {
+	visible := files[:0]
+	for _, file := range files {
+		if !n.accessPermissionFor(file).Read {
+			continue
+		}
+		file.CapabilitiesBs = n.capabilitiesFor(file)
+		visible = append(visible, file)
+	}
+	return visible
 }
 
 func (n *shareNavigator) latestSharedSingleFile(ctx context.Context) (*File, error) {
@@ -252,6 +334,7 @@ func (n *shareNavigator) latestSharedSingleFile(ctx context.Context) (*File, err
 
 		f := newFile(n.shareRoot, file)
 		f.OwnerModel = n.shareRoot.OwnerModel
+		f.CapabilitiesBs = n.capabilitiesFor(f)
 
 		return f, nil
 	}
@@ -260,11 +343,15 @@ func (n *shareNavigator) latestSharedSingleFile(ctx context.Context) (*File, err
 }
 
 func (n *shareNavigator) Capabilities(isSearching bool) *fs.NavigatorProps {
+	maxPageSize := 0
+	if n.config != nil {
+		maxPageSize = n.config.MaxPageSize
+	}
 	res := &fs.NavigatorProps{
-		Capability:            shareNavigatorCapability,
+		Capability:            n.capabilitiesFor(n.shareRoot),
 		OrderDirectionOptions: fullOrderDirectionOption,
 		OrderByOptions:        fullOrderByOption,
-		MaxPageSize:           n.config.MaxPageSize,
+		MaxPageSize:           maxPageSize,
 	}
 
 	if isSearching {
@@ -285,6 +372,9 @@ func (n *shareNavigator) FollowTx(ctx context.Context) (func(), error) {
 	}
 
 	newSharClient, _, _, err := inventory.WithTx(ctx, n.shareClient)
+	if err != nil {
+		return nil, err
+	}
 
 	oldFileClient, oldShareClient := n.fileClient, n.shareClient
 	revert := func() {

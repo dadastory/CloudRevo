@@ -13,11 +13,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cloudreve/Cloudreve/v4/application/constants"
-	"github.com/cloudreve/Cloudreve/v4/pkg/auth"
-	"github.com/cloudreve/Cloudreve/v4/pkg/conf"
-	"github.com/cloudreve/Cloudreve/v4/pkg/logging"
-	"github.com/cloudreve/Cloudreve/v4/pkg/serializer"
+	"github.com/dadastory/CloudRevo/application/constants"
+	"github.com/dadastory/CloudRevo/pkg/auth"
+	"github.com/dadastory/CloudRevo/pkg/conf"
+	"github.com/dadastory/CloudRevo/pkg/logging"
+	"github.com/dadastory/CloudRevo/pkg/serializer"
 	"github.com/samber/lo"
 )
 
@@ -150,7 +150,7 @@ func (c *HTTPClient) Request(method, target string, body io.Reader, opts ...Opti
 		}
 	}
 
-	req.Header.Set("User-Agent", "Cloudreve/"+constants.BackendVersion)
+	req.Header.Set("User-Agent", "CloudRevo/"+constants.BackendVersion)
 
 	if options.ctx != nil && options.withCorrelationID {
 		req.Header.Add(CorrelationHeader, logging.CorrelationID(options.ctx).String())

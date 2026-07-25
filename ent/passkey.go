@@ -10,8 +10,8 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
-	"github.com/cloudreve/Cloudreve/v4/ent/passkey"
-	"github.com/cloudreve/Cloudreve/v4/ent/user"
+	"github.com/dadastory/CloudRevo/ent/passkey"
+	"github.com/dadastory/CloudRevo/ent/user"
 	"github.com/go-webauthn/webauthn/webauthn"
 )
 

@@ -4,16 +4,16 @@ import (
 	"context"
 	"strings"
 
-	"github.com/cloudreve/Cloudreve/v4/application/dependency"
-	"github.com/cloudreve/Cloudreve/v4/ent"
-	"github.com/cloudreve/Cloudreve/v4/inventory"
-	"github.com/cloudreve/Cloudreve/v4/inventory/types"
-	"github.com/cloudreve/Cloudreve/v4/pkg/cluster/routes"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/fs"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/manager"
-	"github.com/cloudreve/Cloudreve/v4/pkg/hashid"
-	"github.com/cloudreve/Cloudreve/v4/pkg/serializer"
-	"github.com/cloudreve/Cloudreve/v4/service/explorer"
+	"github.com/dadastory/CloudRevo/application/dependency"
+	"github.com/dadastory/CloudRevo/ent"
+	"github.com/dadastory/CloudRevo/inventory"
+	"github.com/dadastory/CloudRevo/inventory/types"
+	"github.com/dadastory/CloudRevo/pkg/cluster/routes"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/fs"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/manager"
+	"github.com/dadastory/CloudRevo/pkg/hashid"
+	"github.com/dadastory/CloudRevo/pkg/serializer"
+	"github.com/dadastory/CloudRevo/service/explorer"
 	"github.com/gin-gonic/gin"
 )
 
@@ -28,7 +28,7 @@ type (
 func (s *ShortLinkRedirectService) RedirectTo(c *gin.Context) string {
 	shareLongUrl := routes.MasterShareLongUrl(s.ID, s.Password)
 
-	shortLinkQuery := c.Request.URL.Query() // Query in ShortLink, adapt to Cloudreve V3
+	shortLinkQuery := c.Request.URL.Query() // Query in ShortLink, adapt to CloudRevo V3
 	shareLongUrlQuery := shareLongUrl.Query()
 
 	userSpecifiedPath := shortLinkQuery.Get("path")

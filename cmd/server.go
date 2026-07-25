@@ -5,25 +5,23 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/cloudreve/Cloudreve/v4/application"
-	"github.com/cloudreve/Cloudreve/v4/application/constants"
-	"github.com/cloudreve/Cloudreve/v4/application/dependency"
-	"github.com/cloudreve/Cloudreve/v4/pkg/logging"
+	"github.com/dadastory/CloudRevo/application"
+	"github.com/dadastory/CloudRevo/application/constants"
+	"github.com/dadastory/CloudRevo/application/dependency"
+	"github.com/dadastory/CloudRevo/pkg/logging"
 	"github.com/spf13/cobra"
 )
 
 func init() {
 	rootCmd.AddCommand(serverCmd)
-	serverCmd.PersistentFlags().StringVarP(&licenseKey, "license-key", "l", "", "License key of your Cloudreve Pro")
 }
 
 var serverCmd = &cobra.Command{
 	Use:   "server",
-	Short: "Start a Cloudreve server with the given config file",
+	Short: "Start a CloudRevo server with the given config file",
 	Run: func(cmd *cobra.Command, args []string) {
 		dep := dependency.NewDependency(
 			dependency.WithConfigPath(confPath),
-			dependency.WithProFlag(constants.IsProBool),
 			dependency.WithRequiredDbVersion(constants.BackendVersion),
 		)
 		server := application.NewServer(dep)

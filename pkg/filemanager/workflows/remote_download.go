@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -13,20 +15,20 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/cloudreve/Cloudreve/v4/application/dependency"
-	"github.com/cloudreve/Cloudreve/v4/ent"
-	"github.com/cloudreve/Cloudreve/v4/ent/task"
-	"github.com/cloudreve/Cloudreve/v4/inventory"
-	"github.com/cloudreve/Cloudreve/v4/inventory/types"
-	"github.com/cloudreve/Cloudreve/v4/pkg/cluster"
-	"github.com/cloudreve/Cloudreve/v4/pkg/downloader"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/fs"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/manager"
-	"github.com/cloudreve/Cloudreve/v4/pkg/hashid"
-	"github.com/cloudreve/Cloudreve/v4/pkg/logging"
-	"github.com/cloudreve/Cloudreve/v4/pkg/queue"
-	"github.com/cloudreve/Cloudreve/v4/pkg/request"
-	"github.com/cloudreve/Cloudreve/v4/pkg/serializer"
+	"github.com/dadastory/CloudRevo/application/dependency"
+	"github.com/dadastory/CloudRevo/ent"
+	"github.com/dadastory/CloudRevo/ent/task"
+	"github.com/dadastory/CloudRevo/inventory"
+	"github.com/dadastory/CloudRevo/inventory/types"
+	"github.com/dadastory/CloudRevo/pkg/cluster"
+	"github.com/dadastory/CloudRevo/pkg/downloader"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/fs"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/manager"
+	"github.com/dadastory/CloudRevo/pkg/hashid"
+	"github.com/dadastory/CloudRevo/pkg/logging"
+	"github.com/dadastory/CloudRevo/pkg/queue"
+	"github.com/dadastory/CloudRevo/pkg/request"
+	"github.com/dadastory/CloudRevo/pkg/serializer"
 	"github.com/samber/lo"
 )
 
@@ -42,11 +44,15 @@ type (
 	}
 	RemoteDownloadTaskPhase string
 	RemoteDownloadTaskState struct {
-		SrcFileUri         string                 `json:"src_file_uri,omitempty"`
-		SrcUri             string                 `json:"src_uri,omitempty"`
-		Dst                string                 `json:"dst,omitempty"`
-		Handle             *downloader.TaskHandle `json:"handle,omitempty"`
-		Status             *downloader.TaskStatus `json:"status,omitempty"`
+		SrcFileUri         string                     `json:"src_file_uri,omitempty"`
+		SrcUri             string                     `json:"src_uri,omitempty"`
+		Dst                string                     `json:"dst,omitempty"`
+		RequestOptions     *downloader.RequestOptions `json:"request_options,omitempty"`
+		TaskOptions        *downloader.TaskOptions    `json:"task_options,omitempty"`
+		PresentationName   string                     `json:"presentation_name,omitempty"`
+		SelectedFiles      []int                      `json:"selected_files,omitempty"`
+		Handle             *downloader.TaskHandle     `json:"handle,omitempty"`
+		Status             *downloader.TaskStatus     `json:"status,omitempty"`
 		NodeState          `json:",inline"`
 		Phase              RemoteDownloadTaskPhase `json:"phase,omitempty"`
 		SlaveUploadTaskID  int                     `json:"slave__upload_task_id,omitempty"`
@@ -82,12 +88,28 @@ func init() {
 }
 
 // NewRemoteDownloadTask creates a new RemoteDownloadTask
-func NewRemoteDownloadTask(ctx context.Context, src string, srcFile, dst string) (queue.Task, error) {
+func NewRemoteDownloadTask(ctx context.Context, src string, srcFile, dst string, requestOptions *downloader.RequestOptions) (queue.Task, error) {
+	return NewRemoteDownloadTaskWithConfig(ctx, src, srcFile, dst, requestOptions, nil, nil, "")
+}
+
+// NewRemoteDownloadTaskWithFiles preserves a user's preflight selection until
+// Gopeed resolves the source during task creation.
+func NewRemoteDownloadTaskWithFiles(ctx context.Context, src string, srcFile, dst string, requestOptions *downloader.RequestOptions, selectedFiles []int) (queue.Task, error) {
+	return NewRemoteDownloadTaskWithConfig(ctx, src, srcFile, dst, requestOptions, nil, selectedFiles, "")
+}
+
+// NewRemoteDownloadTaskWithConfig stores validated, task-scoped Gopeed
+// settings and preflight presentation data without affecting transfer paths.
+func NewRemoteDownloadTaskWithConfig(ctx context.Context, src string, srcFile, dst string, requestOptions *downloader.RequestOptions, taskOptions *downloader.TaskOptions, selectedFiles []int, presentationName string) (queue.Task, error) {
 	state := &RemoteDownloadTaskState{
-		SrcUri:     src,
-		SrcFileUri: srcFile,
-		Dst:        dst,
-		NodeState:  NodeState{},
+		SrcUri:           src,
+		SrcFileUri:       srcFile,
+		Dst:              dst,
+		RequestOptions:   cloneRequestOptions(requestOptions),
+		TaskOptions:      cloneTaskOptions(taskOptions),
+		PresentationName: presentationName,
+		SelectedFiles:    append([]int(nil), selectedFiles...),
+		NodeState:        NodeState{},
 	}
 	stateBytes, err := json.Marshal(state)
 	if err != nil {
@@ -182,7 +204,7 @@ func (m *RemoteDownloadTask) createDownloadTask(ctx context.Context, dep depende
 	// Validate the user-supplied URL (m.state.SrcUri) against the assigned
 	// node's URLValidation policy, with the operator-configured site URL
 	// host(s) always added to the allowlist. We don't validate SrcFileUri
-	// resolution because that's a Cloudreve-internal entity URL pointing at
+	// resolution because that's a CloudRevo-internal entity URL pointing at
 	// the user's own torrent file.
 	if m.state.SrcUri != "" {
 		opt := buildSSRFOptions(ctx, dep, m.node.Settings(ctx))
@@ -215,8 +237,30 @@ func (m *RemoteDownloadTask) createDownloadTask(ctx context.Context, dep depende
 	}
 
 	// Create download task
-	handle, err := m.d.CreateTask(ctx, torrentUrl, user.Edges.Group.Settings.RemoteDownloadOptions)
+	var (
+		handle *downloader.TaskHandle
+		err    error
+	)
+	if len(m.state.SelectedFiles) > 0 || m.state.TaskOptions != nil {
+		selectedDownloader, ok := m.d.(downloader.SelectedFilesDownloader)
+		if !ok {
+			return task.StatusError, fmt.Errorf("configured downloader does not support preselected files: %w", queue.CriticalErr)
+		}
+		handle, err = selectedDownloader.CreateTaskWithOptions(ctx, torrentUrl, user.Edges.Group.Settings.RemoteDownloadOptions, m.state.RequestOptions, m.state.TaskOptions, m.state.SelectedFiles)
+	} else if m.state.RequestOptions != nil {
+		requestDownloader, ok := m.d.(downloader.RequestOptionsDownloader)
+		if !ok {
+			return task.StatusError, fmt.Errorf("configured downloader does not support per-request HTTP options: %w", queue.CriticalErr)
+		}
+		handle, err = requestDownloader.CreateTaskWithRequestOptions(ctx, torrentUrl, user.Edges.Group.Settings.RemoteDownloadOptions, m.state.RequestOptions)
+	} else {
+		handle, err = m.d.CreateTask(ctx, torrentUrl, user.Edges.Group.Settings.RemoteDownloadOptions)
+	}
 	if err != nil {
+		var sourceErr *downloader.SourceHTTPError
+		if errors.As(err, &sourceErr) && sourceErr.IsClientError() {
+			return task.StatusError, fmt.Errorf("source server rejected the download request (HTTP %d): %w", sourceErr.StatusCode, queue.CriticalErr)
+		}
 		return task.StatusError, fmt.Errorf("failed to create download task: %w", err)
 	}
 
@@ -227,7 +271,7 @@ func (m *RemoteDownloadTask) createDownloadTask(ctx context.Context, dep depende
 
 // buildSSRFOptions composes the SSRF policy for a download: the assigned
 // node's URLValidation settings, plus the operator-configured site URL hosts
-// (always allowlisted so users can fetch files served by Cloudreve itself).
+// (always allowlisted so users can fetch files served by CloudRevo itself).
 func buildSSRFOptions(ctx context.Context, dep dependency.Dep, node *types.NodeSetting) request.SSRFOptions {
 	opt := request.SSRFOptions{}
 	if node != nil && node.URLValidation != nil {
@@ -241,6 +285,12 @@ func buildSSRFOptions(ctx context.Context, dep dependency.Dep, node *types.NodeS
 		}
 	}
 	return opt
+}
+
+// BuildSSRFOptions exposes the exact task-time SSRF policy for request-time
+// preflight, keeping both paths subject to the same allowlist.
+func BuildSSRFOptions(ctx context.Context, dep dependency.Dep, node *types.NodeSetting) request.SSRFOptions {
+	return buildSSRFOptions(ctx, dep, node)
 }
 
 func (m *RemoteDownloadTask) monitor(ctx context.Context, dep dependency.Dep) (task.Status, error) {
@@ -619,11 +669,147 @@ func (m *RemoteDownloadTask) SetDownloadTarget(ctx context.Context, args ...*dow
 
 // CancelDownload cancels the download task
 func (m *RemoteDownloadTask) CancelDownload(ctx context.Context) error {
+	if m.state == nil {
+		state := &RemoteDownloadTaskState{}
+		if err := json.Unmarshal([]byte(m.State()), state); err != nil {
+			return fmt.Errorf("failed to unmarshal state: %w", err)
+		}
+		m.state = state
+	}
 	if m.state.Handle == nil {
 		return nil
 	}
+	if m.d == nil {
+		dep := dependency.FromContext(ctx)
+		node, err := allocateNode(ctx, dep, &m.state.NodeState, types.NodeCapabilityRemoteDownload)
+		if err != nil {
+			return fmt.Errorf("failed to allocate node: %w", err)
+		}
+		d, err := node.CreateDownloader(ctx, dep.RequestClient(), dep.SettingProvider())
+		if err != nil {
+			return fmt.Errorf("failed to create downloader: %w", err)
+		}
+		m.node = node
+		m.d = d
+	}
 
 	return m.d.Cancel(ctx, m.state.Handle)
+}
+
+const (
+	maxRemoteDownloadHeaders    = 16
+	maxRemoteDownloadHeaderSize = 4096
+	maxRemoteDownloadBodySize   = 16 * 1024
+)
+
+var forbiddenRequestHeaders = map[string]struct{}{
+	"Connection":          {},
+	"Content-Length":      {},
+	"Host":                {},
+	"Keep-Alive":          {},
+	"Proxy-Authenticate":  {},
+	"Proxy-Authorization": {},
+	"Te":                  {},
+	"Trailer":             {},
+	"Transfer-Encoding":   {},
+	"Upgrade":             {},
+}
+
+// ValidateRequestOptions validates request context before it is stored in
+// private workflow state. It deliberately supports only the small HTTP subset
+// Gopeed needs for an authorized direct download.
+func ValidateRequestOptions(source string, options *downloader.RequestOptions) (*downloader.RequestOptions, error) {
+	if options == nil || (options.Method == "" && len(options.Headers) == 0 && options.Body == "") {
+		return nil, nil
+	}
+	u, err := url.Parse(source)
+	if err != nil || (strings.ToLower(u.Scheme) != "http" && strings.ToLower(u.Scheme) != "https") {
+		return nil, fmt.Errorf("request options require an HTTP(S) source")
+	}
+
+	validated := &downloader.RequestOptions{Headers: make(map[string]string, len(options.Headers))}
+	validated.Method = strings.ToUpper(strings.TrimSpace(options.Method))
+	if validated.Method == "" {
+		validated.Method = http.MethodGet
+	}
+	if validated.Method != http.MethodGet && validated.Method != http.MethodPost {
+		return nil, fmt.Errorf("request method must be GET or POST")
+	}
+	if len(options.Headers) > maxRemoteDownloadHeaders {
+		return nil, fmt.Errorf("too many request headers")
+	}
+	for name, value := range options.Headers {
+		canonicalName := http.CanonicalHeaderKey(strings.TrimSpace(name))
+		if canonicalName == "" || !isHTTPHeaderName(canonicalName) || containsRequestControl(name) || containsRequestControl(value) {
+			return nil, fmt.Errorf("invalid request header")
+		}
+		if _, forbidden := forbiddenRequestHeaders[canonicalName]; forbidden || strings.HasPrefix(canonicalName, "Proxy-") {
+			return nil, fmt.Errorf("request header %q is not allowed", canonicalName)
+		}
+		if len(value) > maxRemoteDownloadHeaderSize {
+			return nil, fmt.Errorf("request header %q is too large", canonicalName)
+		}
+		if _, duplicate := validated.Headers[canonicalName]; duplicate {
+			return nil, fmt.Errorf("duplicate request header %q", canonicalName)
+		}
+		validated.Headers[canonicalName] = value
+	}
+	if len(options.Body) > maxRemoteDownloadBodySize || strings.IndexByte(options.Body, 0) >= 0 {
+		return nil, fmt.Errorf("request body is invalid or too large")
+	}
+	validated.Body = options.Body
+	if len(validated.Headers) == 0 {
+		validated.Headers = nil
+	}
+	return validated, nil
+}
+
+func cloneRequestOptions(options *downloader.RequestOptions) *downloader.RequestOptions {
+	if options == nil {
+		return nil
+	}
+	cloned := &downloader.RequestOptions{Method: options.Method, Body: options.Body}
+	if len(options.Headers) > 0 {
+		cloned.Headers = make(map[string]string, len(options.Headers))
+		for name, value := range options.Headers {
+			cloned.Headers[name] = value
+		}
+	}
+	return cloned
+}
+
+func ValidateTaskOptions(source string, options *downloader.TaskOptions) (*downloader.TaskOptions, error) {
+	if options == nil {
+		return nil, nil
+	}
+	u, err := url.Parse(source)
+	if err != nil || (strings.ToLower(u.Scheme) != "http" && strings.ToLower(u.Scheme) != "https") {
+		return nil, fmt.Errorf("task options require an HTTP(S) source")
+	}
+	if options.Connections < 1 || options.Connections > 256 {
+		return nil, fmt.Errorf("connections must be between 1 and 256")
+	}
+	return &downloader.TaskOptions{Connections: options.Connections}, nil
+}
+
+func cloneTaskOptions(options *downloader.TaskOptions) *downloader.TaskOptions {
+	if options == nil {
+		return nil
+	}
+	return &downloader.TaskOptions{Connections: options.Connections}
+}
+
+func containsRequestControl(value string) bool {
+	return strings.ContainsAny(value, "\r\n\x00")
+}
+
+func isHTTPHeaderName(value string) bool {
+	for _, r := range value {
+		if !(r >= '0' && r <= '9' || r >= 'A' && r <= 'Z' || r >= 'a' && r <= 'z' || strings.ContainsRune("!#$%&'*+-.^_`|~", r)) {
+			return false
+		}
+	}
+	return true
 }
 
 func (m *RemoteDownloadTask) Summarize(hasher hashid.Encoder) *queue.Summary {
@@ -640,6 +826,8 @@ func (m *RemoteDownloadTask) Summarize(hasher hashid.Encoder) *queue.Summary {
 
 		// Redact save path
 		status.SavePath = ""
+	} else if m.state.PresentationName != "" {
+		status = &downloader.TaskStatus{Name: m.state.PresentationName}
 	}
 
 	failed := m.state.Failed

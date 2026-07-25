@@ -8,18 +8,18 @@ import (
 	"path"
 	"time"
 
-	"github.com/cloudreve/Cloudreve/v4/ent"
-	"github.com/cloudreve/Cloudreve/v4/inventory"
-	"github.com/cloudreve/Cloudreve/v4/inventory/types"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/fs"
-	"github.com/cloudreve/Cloudreve/v4/pkg/hashid"
-	"github.com/cloudreve/Cloudreve/v4/pkg/serializer"
-	"github.com/cloudreve/Cloudreve/v4/pkg/util"
+	"github.com/dadastory/CloudRevo/ent"
+	"github.com/dadastory/CloudRevo/inventory"
+	"github.com/dadastory/CloudRevo/inventory/types"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/fs"
+	"github.com/dadastory/CloudRevo/pkg/hashid"
+	"github.com/dadastory/CloudRevo/pkg/serializer"
+	"github.com/dadastory/CloudRevo/pkg/util"
 )
 
 func (f *DBFS) PreValidateUpload(ctx context.Context, dst *fs.URI, files ...fs.PreValidateFile) error {
 	// Get navigator
-	navigator, err := f.getNavigator(ctx, dst, NavigatorCapabilityUploadFile, NavigatorCapabilityLockFile)
+	navigator, err := f.getNavigatorForSharedOperation(ctx, dst, sharedOperationUploadNew)
 	if err != nil {
 		return err
 	}
@@ -34,8 +34,8 @@ func (f *DBFS) PreValidateUpload(ctx context.Context, dst *fs.URI, files ...fs.P
 	}
 
 	// check ownership
-	if f.user.ID != dstFile.OwnerID() {
-		return fmt.Errorf("failed to evaluate permission: %w", err)
+	if !f.canAccessWithNavigator(navigator, dstFile, NavigatorCapabilityUploadFile) {
+		return fs.ErrOwnerOnly
 	}
 
 	total := int64(0)
@@ -71,10 +71,12 @@ func (f *DBFS) PreValidateUpload(ctx context.Context, dst *fs.URI, files ...fs.P
 }
 
 func (f *DBFS) PrepareUpload(ctx context.Context, req *fs.UploadRequest, opts ...fs.Option) (*fs.UploadSession, error) {
-	// Get navigator.
-	requiredCaps := []NavigatorCapability{NavigatorCapabilityUploadFile, NavigatorCapabilityLockFile}
+	// Share uploads need to distinguish creating a new file from replacing an
+	// existing one, so authorization happens once the target has been resolved
+	// below. Locks are implementation details and never a visitor capability.
+	requiredCaps := []NavigatorCapability(nil)
 	if req.Props.EntityType != nil && *req.Props.EntityType == types.EntityTypeThumbnail {
-		requiredCaps = []NavigatorCapability{NavigatorCapabilityGenerateThumb, NavigatorCapabilityLockFile}
+		requiredCaps = []NavigatorCapability{NavigatorCapabilityGenerateThumb}
 	}
 	navigator, err := f.getNavigator(ctx, req.Props.Uri, requiredCaps...)
 	if err != nil {
@@ -106,8 +108,24 @@ func (f *DBFS) PrepareUpload(ctx context.Context, req *fs.UploadRequest, opts ..
 	if !fileExisted && (req.Props.EntityType != nil && *req.Props.EntityType != types.EntityTypeVersion) {
 		return nil, fs.ErrPathNotExist
 	}
+	if shareNavigator, ok := navigator.(*shareNavigator); ok {
+		operation := sharedOperationUploadNew
+		if fileExisted {
+			operation = sharedOperationUploadReplace
+		}
+		if !shareNavigator.allows(ancestor, sharedOperationCapabilities(operation)[0]) {
+			return nil, ErrPermissionDenied
+		}
+	} else if !navigator.Capabilities(false).Capability.Enabled(int(NavigatorCapabilityUploadFile)) {
+		return nil, fs.ErrNotSupportedAction.WithError(fmt.Errorf("upload is not supported under current fs"))
+	}
 
-	if _, ok := ctx.Value(ByPassOwnerCheckCtxKey{}).(bool); !ok && ancestor.OwnerID() != f.user.ID {
+	capability := NavigatorCapabilityUploadFile
+	if fileExisted {
+		capability = NavigatorCapabilityVersionControl
+	}
+	if _, ok := ctx.Value(ByPassOwnerCheckCtxKey{}).(bool); !ok &&
+		!f.canAccessWithNavigator(navigator, ancestor, capability) {
 		return nil, fs.ErrOwnerOnly
 	}
 
@@ -184,6 +202,12 @@ func (f *DBFS) PrepareUpload(ctx context.Context, req *fs.UploadRequest, opts ..
 	if err != nil {
 		return nil, serializer.NewError(serializer.CodeDBError, "Failed to start transaction", err)
 	}
+	resetNavigator, err := navigator.FollowTx(ctx)
+	if err != nil {
+		_ = inventory.Rollback(dbTx)
+		return nil, serializer.NewError(serializer.CodeDBError, "Failed to inherit upload transaction in navigator", err)
+	}
+	defer resetNavigator()
 
 	if err := dbTx.ReserveStorage(ctx, f.userClient, owner.ID, req.Props.Size, capacity.Total); err != nil {
 		_ = inventory.Rollback(dbTx)
@@ -277,6 +301,11 @@ func (f *DBFS) PrepareUpload(ctx context.Context, req *fs.UploadRequest, opts ..
 }
 
 func (f *DBFS) CompleteUpload(ctx context.Context, session *fs.UploadSession) (fs.File, error) {
+	requiredCapability := shareUploadCapability(!session.NewFileCreated)
+	if _, err := f.getNavigator(ctx, session.Props.Uri, requiredCapability); err != nil {
+		return nil, err
+	}
+
 	// Get placeholder file
 	file, err := f.Get(ctx, session.Props.Uri, WithFileEntities(), WithNotRoot())
 	if err != nil {
@@ -382,26 +411,50 @@ func (f *DBFS) CompleteUpload(ctx context.Context, session *fs.UploadSession) (f
 	return file, nil
 }
 
+func shareUploadCapability(fileExisted bool) NavigatorCapability {
+	if fileExisted {
+		return NavigatorCapabilityVersionControl
+	}
+	return NavigatorCapabilityUploadFile
+}
+
 // This function will be used:
 // - File still locked by uplaod session
 // - File unlocked, upload session valid
 // - File unlocked, upload session not valid
 func (f *DBFS) CancelUploadSession(ctx context.Context, path *fs.URI, sessionID string, session *fs.UploadSession) ([]fs.Entity, *fs.IndexDiff, error) {
+	if session == nil || session.Props == nil || session.Props.Uri == nil ||
+		!session.Props.Uri.IsSame(path, hashid.EncodeUserID(f.hasher, f.user.ID)) {
+		return nil, nil, serializer.NewError(serializer.CodeUploadSessionExpired, "Upload session not found", nil)
+	}
+
+	// Re-evaluate the same action that created the session before changing its
+	// placeholder. Replacing an existing file is an update, not a create.
+	operation := sharedOperationUploadNew
+	if session != nil && !session.NewFileCreated {
+		operation = sharedOperationUploadReplace
+	}
+	navigator, err := f.getNavigatorForSharedOperation(ctx, path, operation)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	// Get placeholder file
-	file, err := f.Get(ctx, path, WithFileEntities(), WithNotRoot())
+	ctx = context.WithValue(ctx, inventory.LoadFileEntity{}, true)
+	file, err := f.getFileByPath(ctx, navigator, path)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get placeholder file: %w", err)
 	}
 
-	filePrivate := file.(*File)
+	filePrivate := file
 
 	// Make sure presented upload session is valid
-	if session != nil && (session.UID != f.user.ID || session.FileID != file.ID()) {
+	if session.UID != f.user.ID || session.FileID != file.ID() {
 		return nil, nil, serializer.NewError(serializer.CodeNotFound, "Upload session not found", nil)
 	}
 
 	// Confirm locks on placeholder file
-	if session != nil && session.LockToken != "" {
+	if session.LockToken != "" {
 		release, ls, err := f.ConfirmLock(ctx, file, file.Uri(false), session.LockToken)
 		if err == nil {
 			release()
@@ -409,7 +462,9 @@ func (f *DBFS) CancelUploadSession(ctx context.Context, path *fs.URI, sessionID 
 		}
 	}
 
-	if _, ok := ctx.Value(ByPassOwnerCheckCtxKey{}).(bool); !ok && filePrivate.OwnerID() != f.user.ID {
+	capability := sharedOperationCapabilities(operation)[0]
+	if _, ok := ctx.Value(ByPassOwnerCheckCtxKey{}).(bool); !ok &&
+		!f.canAccessWithNavigator(navigator, filePrivate, capability) {
 		return nil, nil, fs.ErrOwnerOnly
 	}
 
@@ -431,17 +486,18 @@ func (f *DBFS) CancelUploadSession(ctx context.Context, path *fs.URI, sessionID 
 		}
 	}
 
-	// Remove upload session metadata
+	if entity == nil {
+		// Given upload session does not exist
+		return nil, nil, serializer.NewError(serializer.CodeUploadSessionExpired, "Upload session not found", nil)
+	}
+
+	// Remove upload session metadata only after the placeholder entity has been
+	// proven to belong to the authenticated cached session.
 	if err := f.fileClient.RemoveMetadata(ctx, filePrivate.Model, MetadataUploadSessionID, ThumbDisabledKey); err != nil {
 		return nil, nil, serializer.NewError(serializer.CodeDBError, "Failed to remove upload session metadata", err)
 	}
 
-	if entity == nil {
-		// Given upload session does not exist
-		return nil, nil, nil
-	}
-
-	if session != nil && session.LockToken != "" {
+	if session.LockToken != "" {
 		defer func() {
 			if err := f.ls.Unlock(time.Now(), session.LockToken); err != nil {
 				f.l.Warning("Failed to unlock file %q: %s", filePrivate.Uri(true).String(), err)
@@ -451,7 +507,7 @@ func (f *DBFS) CancelUploadSession(ctx context.Context, path *fs.URI, sessionID 
 
 	if len(filePrivate.Entities()) == 1 {
 		// Only one placeholder entity, just delete this file
-		entities, indexDiff, err := f.Delete(ctx, []*fs.URI{path})
+		entities, indexDiff, err := f.Delete(ctx, []*fs.URI{path}, fs.WithSysSkipSoftDelete(true))
 		return entities, indexDiff, err
 	}
 

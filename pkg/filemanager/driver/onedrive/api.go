@@ -11,10 +11,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/chunk"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/chunk/backoff"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/fs"
-	"github.com/cloudreve/Cloudreve/v4/pkg/request"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/chunk"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/chunk/backoff"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/fs"
+	"github.com/dadastory/CloudRevo/pkg/request"
 )
 
 const (

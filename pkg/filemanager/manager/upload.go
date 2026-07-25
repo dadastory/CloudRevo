@@ -8,17 +8,17 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cloudreve/Cloudreve/v4/application/dependency"
-	"github.com/cloudreve/Cloudreve/v4/ent"
-	"github.com/cloudreve/Cloudreve/v4/ent/task"
-	"github.com/cloudreve/Cloudreve/v4/inventory"
-	"github.com/cloudreve/Cloudreve/v4/inventory/types"
-	"github.com/cloudreve/Cloudreve/v4/pkg/cluster"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/driver"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/fs"
-	"github.com/cloudreve/Cloudreve/v4/pkg/logging"
-	"github.com/cloudreve/Cloudreve/v4/pkg/queue"
-	"github.com/cloudreve/Cloudreve/v4/pkg/serializer"
+	"github.com/dadastory/CloudRevo/application/dependency"
+	"github.com/dadastory/CloudRevo/ent"
+	"github.com/dadastory/CloudRevo/ent/task"
+	"github.com/dadastory/CloudRevo/inventory"
+	"github.com/dadastory/CloudRevo/inventory/types"
+	"github.com/dadastory/CloudRevo/pkg/cluster"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/driver"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/fs"
+	"github.com/dadastory/CloudRevo/pkg/logging"
+	"github.com/dadastory/CloudRevo/pkg/queue"
+	"github.com/dadastory/CloudRevo/pkg/serializer"
 	"github.com/gofrs/uuid"
 	"github.com/samber/lo"
 )
@@ -201,7 +201,7 @@ func (m *manager) ConfirmUploadSession(ctx context.Context, session *fs.UploadSe
 		ctx = fs.LockSessionToContext(ctx, ls)
 	}
 
-	// Make sure this storage policy is OK to receive data from clients to Cloudreve server.
+	// Make sure this storage policy is OK to receive data from clients to CloudRevo server.
 	if session.Policy.Type != types.PolicyTypeLocal && !session.Policy.Settings.Relay {
 		return nil, serializer.NewError(serializer.CodePolicyNotAllowed, "", nil)
 	}
@@ -314,10 +314,14 @@ func (m *manager) CancelUploadSession(ctx context.Context, path *fs.URI, session
 	// Get upload session
 	var session *fs.UploadSession
 	sessionRaw, ok := m.kv.Get(UploadSessionCachePrefix + sessionID)
-	if ok {
-		sessionTyped := sessionRaw.(fs.UploadSession)
-		session = &sessionTyped
+	if !ok {
+		return serializer.NewError(serializer.CodeUploadSessionExpired, "Upload session does not exist or expired", nil)
 	}
+	sessionTyped, ok := sessionRaw.(fs.UploadSession)
+	if !ok {
+		return serializer.NewError(serializer.CodeUploadSessionExpired, "Upload session is invalid", nil)
+	}
+	session = &sessionTyped
 
 	var (
 		staleEntities []fs.Entity
@@ -334,26 +338,24 @@ func (m *manager) CancelUploadSession(ctx context.Context, path *fs.URI, session
 		m.l.Debug("New stale entities: %v", staleEntities)
 	}
 
-	if session != nil {
-		ctx = context.WithValue(ctx, cluster.SlaveNodeIDCtx{}, strconv.Itoa(session.Policy.NodeID))
-		d, err := m.GetStorageDriver(ctx, m.CastStoragePolicyOnSlave(ctx, session.Policy))
-		if err != nil {
-			return fmt.Errorf("failed to get storage driver: %w", err)
-		}
-
-		if m.stateless {
-			if _, err = d.Delete(ctx, session.Props.SavePath); err != nil {
-				return fmt.Errorf("failed to delete file: %w", err)
-			}
-		} else {
-			if err = d.CancelToken(ctx, session); err != nil {
-				return fmt.Errorf("failed to cancel upload session: %w", err)
-			}
-		}
-
-		m.kv.Delete(UploadSessionCachePrefix, session.Props.UploadSessionID)
-		releaseUploadSessionLock(session.Props.UploadSessionID)
+	ctx = context.WithValue(ctx, cluster.SlaveNodeIDCtx{}, strconv.Itoa(session.Policy.NodeID))
+	d, err := m.GetStorageDriver(ctx, m.CastStoragePolicyOnSlave(ctx, session.Policy))
+	if err != nil {
+		return fmt.Errorf("failed to get storage driver: %w", err)
 	}
+
+	if m.stateless {
+		if _, err = d.Delete(ctx, session.Props.SavePath); err != nil {
+			return fmt.Errorf("failed to delete file: %w", err)
+		}
+	} else {
+		if err = d.CancelToken(ctx, session); err != nil {
+			return fmt.Errorf("failed to cancel upload session: %w", err)
+		}
+	}
+
+	m.kv.Delete(UploadSessionCachePrefix, session.Props.UploadSessionID)
+	releaseUploadSessionLock(session.Props.UploadSessionID)
 
 	// Delete stale entities
 	if len(staleEntities) > 0 {

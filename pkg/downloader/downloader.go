@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/gob"
 	"fmt"
+	"net/http"
 )
 
 var (
@@ -22,6 +23,38 @@ type (
 		SetFilesToDownload(ctx context.Context, handle *TaskHandle, args ...*SetFileToDownloadArgs) error
 		// Test tests the connection to the downloader.
 		Test(ctx context.Context) (string, error)
+	}
+	// RequestOptionsDownloader is implemented by downloaders that can apply
+	// request-specific HTTP context without turning it into a global node setting.
+	RequestOptionsDownloader interface {
+		CreateTaskWithRequestOptions(ctx context.Context, url string, options map[string]interface{}, requestOptions *RequestOptions) (*TaskHandle, error)
+	}
+	// SelectedFilesDownloader is implemented by downloaders that can choose
+	// resolved files before a task is started.
+	SelectedFilesDownloader interface {
+		CreateTaskWithOptions(ctx context.Context, url string, options map[string]interface{}, requestOptions *RequestOptions, taskOptions *TaskOptions, selectedFiles []int) (*TaskHandle, error)
+	}
+	// PreviewDownloader resolves a source without creating a runnable task.
+	// Implementations must release all temporary resolver state before return.
+	PreviewDownloader interface {
+		PreviewTask(ctx context.Context, url string, options map[string]interface{}, requestOptions *RequestOptions, taskOptions *TaskOptions) (*TaskStatus, error)
+	}
+	// RequestOptions holds validated HTTP request context for a single remote download.
+	// It is stored by the workflow in private task state only.
+	RequestOptions struct {
+		Method  string            `json:"method,omitempty"`
+		Headers map[string]string `json:"headers,omitempty"`
+		Body    string            `json:"body,omitempty"`
+	}
+	// TaskOptions holds the narrowly-scoped Gopeed settings that are safe to
+	// configure for an individual remote download.
+	TaskOptions struct {
+		Connections int `json:"connections,omitempty"`
+	}
+	// SourceHTTPError identifies an HTTP response returned by the requested
+	// download source, rather than by the downloader service itself.
+	SourceHTTPError struct {
+		StatusCode int
 	}
 
 	// TaskHandle represents a task handle for future operations
@@ -60,6 +93,14 @@ type (
 		Download bool `json:"download"`
 	}
 )
+
+func (e *SourceHTTPError) Error() string {
+	return fmt.Sprintf("source server rejected the download request (HTTP %d)", e.StatusCode)
+}
+
+func (e *SourceHTTPError) IsClientError() bool {
+	return e.StatusCode >= http.StatusBadRequest && e.StatusCode < http.StatusInternalServerError
+}
 
 const (
 	StatusDownloading Status = "downloading"

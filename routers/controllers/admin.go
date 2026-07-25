@@ -1,8 +1,9 @@
 package controllers
 
 import (
-	"github.com/cloudreve/Cloudreve/v4/pkg/serializer"
-	"github.com/cloudreve/Cloudreve/v4/service/admin"
+	"strconv"
+	"github.com/dadastory/CloudRevo/pkg/serializer"
+	"github.com/dadastory/CloudRevo/service/admin"
 	"github.com/gin-gonic/gin"
 )
 
@@ -577,6 +578,20 @@ func AdminGetShare(c *gin.Context) {
 		return
 	}
 	c.JSON(200, serializer.Response{Data: res})
+}
+
+func AdminSetDefaultShare(c *gin.Context) {
+	service := ParametersFromContext[*admin.DefaultShareService](c, admin.DefaultShareParamCtx{})
+	shareID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(200, serializer.Err(c, serializer.NewError(serializer.CodeParamErr, "invalid share ID", err)))
+		return
+	}
+	if err := service.SetDefault(c, shareID); err != nil {
+		c.JSON(200, serializer.Err(c, err))
+		return
+	}
+	c.JSON(200, serializer.Response{})
 }
 
 func AdminBatchDeleteShare(c *gin.Context) {

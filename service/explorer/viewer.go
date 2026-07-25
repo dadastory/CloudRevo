@@ -3,25 +3,24 @@ package explorer
 import (
 	"errors"
 	"fmt"
-	"github.com/cloudreve/Cloudreve/v4/application/constants"
 	"net/http"
 	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/cloudreve/Cloudreve/v4/application/dependency"
-	"github.com/cloudreve/Cloudreve/v4/ent"
-	"github.com/cloudreve/Cloudreve/v4/inventory"
-	"github.com/cloudreve/Cloudreve/v4/inventory/types"
-	"github.com/cloudreve/Cloudreve/v4/pkg/cluster/routes"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/fs"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/fs/dbfs"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/lock"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/manager"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/manager/entitysource"
-	"github.com/cloudreve/Cloudreve/v4/pkg/hashid"
-	"github.com/cloudreve/Cloudreve/v4/pkg/serializer"
-	"github.com/cloudreve/Cloudreve/v4/pkg/wopi"
+	"github.com/dadastory/CloudRevo/application/dependency"
+	"github.com/dadastory/CloudRevo/ent"
+	"github.com/dadastory/CloudRevo/inventory"
+	"github.com/dadastory/CloudRevo/inventory/types"
+	"github.com/dadastory/CloudRevo/pkg/cluster/routes"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/fs"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/fs/dbfs"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/lock"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/manager"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/manager/entitysource"
+	"github.com/dadastory/CloudRevo/pkg/hashid"
+	"github.com/dadastory/CloudRevo/pkg/serializer"
+	"github.com/dadastory/CloudRevo/pkg/wopi"
 	"github.com/gin-gonic/gin"
 )
 
@@ -44,9 +43,17 @@ func prepareFs(c *gin.Context) (*fs.URI, manager.FileManager, *ent.User, *manage
 }
 
 func (service *WopiService) Unlock(c *gin.Context) error {
-	_, m, _, _, dep, err := prepareFs(c)
+	uri, m, _, viewerSession, dep, err := prepareFs(c)
 	if err != nil {
 		return err
+	}
+	if viewerSession.Action != types.ViewerActionEdit {
+		c.Status(http.StatusNotFound)
+		c.Header(wopi.ServerErrorHeader, "read-only access")
+		return nil
+	}
+	if _, err := m.Get(c, uri, dbfs.WithRequiredCapabilities(dbfs.NavigatorCapabilityVersionControl), dbfs.WithNotRoot()); err != nil {
+		return fmt.Errorf("failed to get file: %w", err)
 	}
 
 	l := dep.Logger()
@@ -63,15 +70,20 @@ func (service *WopiService) Unlock(c *gin.Context) error {
 }
 
 func (service *WopiService) RefreshLock(c *gin.Context) error {
-	uri, m, _, _, dep, err := prepareFs(c)
+	uri, m, _, viewerSession, dep, err := prepareFs(c)
 	if err != nil {
 		return err
+	}
+	if viewerSession.Action != types.ViewerActionEdit {
+		c.Status(http.StatusNotFound)
+		c.Header(wopi.ServerErrorHeader, "read-only access")
+		return nil
 	}
 
 	l := dep.Logger()
 
 	// Make sure file exists and readable
-	file, err := m.Get(c, uri, dbfs.WithRequiredCapabilities(dbfs.NavigatorCapabilityLockFile), dbfs.WithNotRoot())
+	file, err := m.Get(c, uri, dbfs.WithRequiredCapabilities(dbfs.NavigatorCapabilityVersionControl), dbfs.WithNotRoot())
 	if err != nil {
 		return fmt.Errorf("failed to get file: %w", err)
 	}
@@ -104,11 +116,16 @@ func (service *WopiService) Lock(c *gin.Context) error {
 	if err != nil {
 		return err
 	}
+	if viewerSession.Action != types.ViewerActionEdit {
+		c.Status(http.StatusNotFound)
+		c.Header(wopi.ServerErrorHeader, "read-only access")
+		return nil
+	}
 
 	l := dep.Logger()
 
 	// Make sure file exists and readable
-	file, err := m.Get(c, uri, dbfs.WithRequiredCapabilities(dbfs.NavigatorCapabilityLockFile), dbfs.WithNotRoot())
+	file, err := m.Get(c, uri, dbfs.WithRequiredCapabilities(dbfs.NavigatorCapabilityVersionControl), dbfs.WithNotRoot())
 	if err != nil {
 		return fmt.Errorf("failed to get file: %w", err)
 	}
@@ -160,9 +177,14 @@ func (service *WopiService) PutContent(c *gin.Context, isPutRelative bool) error
 	if err != nil {
 		return err
 	}
+	if viewerSession.Action != types.ViewerActionEdit {
+		c.Status(http.StatusNotFound)
+		c.Header(wopi.ServerErrorHeader, "read-only access")
+		return nil
+	}
 
-	// Make sure file exists and readable
-	file, err := m.Get(c, uri, dbfs.WithRequiredCapabilities(dbfs.NavigatorCapabilityUploadFile), dbfs.WithNotRoot())
+	// Make sure the existing file can be updated.
+	file, err := m.Get(c, uri, dbfs.WithRequiredCapabilities(dbfs.NavigatorCapabilityVersionControl), dbfs.WithNotRoot())
 	if err != nil {
 		return fmt.Errorf("failed to get file: %w", err)
 	}
@@ -352,8 +374,9 @@ func (service *WopiService) FileInfo(c *gin.Context) (*WopiFileInfo, error) {
 		return nil, serializer.NewError(serializer.CodeNotFound, "version not found", nil)
 	}
 
-	canEdit := file.PrimaryEntityID() == targetEntity.ID() && file.OwnerID() == user.ID && uri.FileSystem() == constants.FileSystemMy
-	cantPutRelative := !canEdit
+	canEdit := file.PrimaryEntityID() == targetEntity.ID() && file.Capabilities().Enabled(int(dbfs.NavigatorCapabilityVersionControl))
+	canPutRelative := canEdit && file.Capabilities().Enabled(int(dbfs.NavigatorCapabilityCreateFile))
+	cantPutRelative := !canPutRelative
 	siteUrl := settings.SiteURL(c)
 	info := &WopiFileInfo{
 		BaseFileName:            file.DisplayName(),
@@ -427,7 +450,7 @@ func (s *CreateViewerSessionService) Create(c *gin.Context) (*ViewerSessionRespo
 		return nil, serializer.NewError(serializer.CodeParamErr, "unknown viewer id", err)
 	}
 
-	viewerSession, err := m.CreateViewerSession(c, uri, s.Version, targetViewer)
+	viewerSession, err := m.CreateViewerSession(c, uri, s.Version, targetViewer, s.PreferredAction)
 	if err != nil {
 		return nil, err
 	}

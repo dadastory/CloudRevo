@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/cloudreve/Cloudreve/v4/inventory/types"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/fs"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/fs/dbfs"
-	"github.com/cloudreve/Cloudreve/v4/pkg/util"
+	"github.com/dadastory/CloudRevo/inventory/types"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/fs"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/fs/dbfs"
+	"github.com/dadastory/CloudRevo/pkg/util"
 	"github.com/gofrs/uuid"
 )
 
@@ -27,6 +27,7 @@ type (
 		FileID   int
 		ViewerID string
 		Version  string
+		Action   types.ViewerAction
 		Token    string
 	}
 	ViewerSessionCacheCtx struct{}
@@ -43,8 +44,12 @@ func init() {
 	gob.Register(ViewerSessionCache{})
 }
 
-func (m *manager) CreateViewerSession(ctx context.Context, uri *fs.URI, version string, viewer *types.Viewer) (*ViewerSession, error) {
-	file, err := m.fs.Get(ctx, uri, dbfs.WithFileEntities(), dbfs.WithNotRoot())
+func (m *manager) CreateViewerSession(ctx context.Context, uri *fs.URI, version string, viewer *types.Viewer, action types.ViewerAction) (*ViewerSession, error) {
+	capabilities := []dbfs.NavigatorCapability{dbfs.NavigatorCapabilityDownloadFile}
+	if action == types.ViewerActionEdit {
+		capabilities = append(capabilities, dbfs.NavigatorCapabilityVersionControl)
+	}
+	file, err := m.fs.Get(ctx, uri, dbfs.WithFileEntities(), dbfs.WithNotRoot(), dbfs.WithRequiredCapabilities(capabilities...))
 	if err != nil {
 		return nil, err
 	}
@@ -68,6 +73,7 @@ func (m *manager) CreateViewerSession(ctx context.Context, uri *fs.URI, version 
 		ViewerID: viewer.ID,
 		FileID:   file.ID(),
 		Version:  version,
+		Action:   action,
 		Token:    fmt.Sprintf("%s.%s", sessionID, token),
 	}
 	ttl := m.settings.ViewerSessionTTL(ctx)

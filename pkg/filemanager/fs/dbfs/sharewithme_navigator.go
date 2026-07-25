@@ -5,40 +5,42 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/cloudreve/Cloudreve/v4/application/constants"
-	"github.com/cloudreve/Cloudreve/v4/ent"
-	"github.com/cloudreve/Cloudreve/v4/inventory"
-	"github.com/cloudreve/Cloudreve/v4/inventory/types"
-	"github.com/cloudreve/Cloudreve/v4/pkg/boolset"
-	"github.com/cloudreve/Cloudreve/v4/pkg/cache"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/fs"
-	"github.com/cloudreve/Cloudreve/v4/pkg/hashid"
-	"github.com/cloudreve/Cloudreve/v4/pkg/logging"
-	"github.com/cloudreve/Cloudreve/v4/pkg/setting"
+	"github.com/dadastory/CloudRevo/application/constants"
+	"github.com/dadastory/CloudRevo/ent"
+	"github.com/dadastory/CloudRevo/inventory"
+	"github.com/dadastory/CloudRevo/inventory/types"
+	"github.com/dadastory/CloudRevo/pkg/boolset"
+	"github.com/dadastory/CloudRevo/pkg/cache"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/fs"
+	"github.com/dadastory/CloudRevo/pkg/hashid"
+	"github.com/dadastory/CloudRevo/pkg/logging"
+	"github.com/dadastory/CloudRevo/pkg/setting"
 )
 
 var sharedWithMeNavigatorCapability = &boolset.BooleanSet{}
 
 // NewSharedWithMeNavigator creates a navigator for user's "shared with me" file system.
 func NewSharedWithMeNavigator(u *ent.User, fileClient inventory.FileClient, l logging.Logger,
-	config *setting.DBFS, hasher hashid.Encoder) Navigator {
+	config *setting.DBFS, hasher hashid.Encoder, shareClient inventory.ShareClient) Navigator {
 	n := &sharedWithMeNavigator{
-		user:       u,
-		l:          l,
-		fileClient: fileClient,
-		config:     config,
-		hasher:     hasher,
+		user:        u,
+		l:           l,
+		fileClient:  fileClient,
+		config:      config,
+		hasher:      hasher,
+		shareClient: shareClient,
 	}
 	n.baseNavigator = newBaseNavigator(fileClient, defaultFilter, u, hasher, config)
 	return n
 }
 
 type sharedWithMeNavigator struct {
-	l          logging.Logger
-	user       *ent.User
-	fileClient inventory.FileClient
-	config     *setting.DBFS
-	hasher     hashid.Encoder
+	l           logging.Logger
+	user        *ent.User
+	fileClient  inventory.FileClient
+	config      *setting.DBFS
+	hasher      hashid.Encoder
+	shareClient inventory.ShareClient
 
 	root *File
 	*baseNavigator
@@ -86,18 +88,67 @@ func (t *sharedWithMeNavigator) To(ctx context.Context, path *fs.URI) (*File, er
 }
 
 func (t *sharedWithMeNavigator) Children(ctx context.Context, parent *File, args *ListArgs) (*ListResult, error) {
-	args.SharedWithMe = true
-	res, err := t.baseNavigator.children(ctx, nil, args)
+	res, err := paginateVisibleChildren(args, func(pageArgs *ListArgs) (*ListResult, error) {
+		pageArgs.SharedWithMe = true
+		return t.baseNavigator.children(ctx, nil, pageArgs)
+	}, func(file *File) bool {
+		if !t.defaultShortcutVisible(ctx, file) {
+			return false
+		}
+		file.Path[pathIndexUser] = newSharedWithMeUri(hashid.EncodeFileID(t.hasher, file.Model.ID))
+		return true
+	})
 	if err != nil {
 		return nil, err
 	}
 
-	// Adding user uri for each file.
-	for i := 0; i < len(res.Files); i++ {
-		res.Files[i].Path[pathIndexUser] = newSharedWithMeUri(hashid.EncodeFileID(t.hasher, res.Files[i].Model.ID))
-	}
-
 	return res, nil
+}
+
+// defaultShortcutVisible prevents a materialized default shortcut from
+// revealing its source name while a background cleanup sweep is pending.
+func (t *sharedWithMeNavigator) defaultShortcutVisible(ctx context.Context, file *File) bool {
+	if !file.IsSymbolic() {
+		return true
+	}
+	if file.Model.Edges.Metadata == nil {
+		if err := t.fileClient.QueryMetadata(ctx, file.Model); err != nil {
+			t.l.Warning("Failed to load shared shortcut metadata: %s", err)
+			return false
+		}
+	}
+	redirect, ok := file.Metadata()[MetadataSharedRedirect]
+	if !ok {
+		return true
+	}
+	uri, err := fs.NewUriFromString(redirect)
+	if err != nil || uri.FileSystem() != constants.FileSystemShare {
+		return false
+	}
+	shareCtx := context.WithValue(ctx, inventory.LoadShareFile{}, true)
+	shareCtx = context.WithValue(shareCtx, inventory.LoadShareUser{}, true)
+	share, err := t.shareClient.GetByHashID(shareCtx, uri.ID(""))
+	if err != nil {
+		return false
+	}
+	if inventory.IsValidShare(share) != nil {
+		return false
+	}
+	return canListDefaultShareShortcut(t.user, share)
+}
+
+func canListDefaultShareShortcut(user *ent.User, share *ent.Share) bool {
+	if user == nil || share == nil || !share.IsDefault || share.Edges.File == nil {
+		return false
+	}
+	if share.Edges.File.Props == nil || share.Edges.File.Props.ShareAccessRule == nil {
+		return true
+	}
+	groupID := 0
+	if user.Edges.Group != nil {
+		groupID = user.Edges.Group.ID
+	}
+	return share.Edges.File.Props.ShareAccessRule.Resolve(user.ID, groupID, inventory.IsAnonymousUser(user)).Read
 }
 
 func (t *sharedWithMeNavigator) Capabilities(isSearching bool) *fs.NavigatorProps {

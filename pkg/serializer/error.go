@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/lock"
-	"github.com/cloudreve/Cloudreve/v4/pkg/logging"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/lock"
+	"github.com/dadastory/CloudRevo/pkg/logging"
 	"github.com/gin-gonic/gin"
 	"github.com/samber/lo"
 )
@@ -107,8 +107,8 @@ const (
 	CodePhoneRequired = 40010
 	// CodeBatchSourceSize 超出批量获取外链限制
 	CodeBatchSourceSize = 40014
-	// CodeBatchAria2Size 超出最大 Aria2 任务数量限制
-	CodeBatchAria2Size = 40015
+	// CodeBatchRemoteDownloadSize 超出最大离线下载任务数量限制
+	CodeBatchRemoteDownloadSize = 40015
 	// CodeParentNotExist 父目录不存在
 	CodeParentNotExist = 40016
 	// CodeUserBaned 用户不活跃
@@ -199,7 +199,7 @@ const (
 	CodeSaveOwnShare = 40059
 	// 从机无法向主机发送回调请求
 	CodeSlavePingMaster = 40060
-	// Cloudreve 版本不一致
+	// CloudRevo 版本不一致
 	CodeVersionMismatch = 40061
 	// 积分不足
 	CodeInsufficientCredit = 40062

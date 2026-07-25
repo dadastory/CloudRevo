@@ -6,13 +6,13 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/cloudreve/Cloudreve/v4/application/migrator/model"
-	"github.com/cloudreve/Cloudreve/v4/ent/node"
-	"github.com/cloudreve/Cloudreve/v4/inventory/types"
+	"github.com/dadastory/CloudRevo/application/migrator/model"
+	"github.com/dadastory/CloudRevo/ent/node"
+	"github.com/dadastory/CloudRevo/inventory/types"
 
-	"github.com/cloudreve/Cloudreve/v4/pkg/boolset"
-	"github.com/cloudreve/Cloudreve/v4/pkg/conf"
-	"github.com/cloudreve/Cloudreve/v4/pkg/setting"
+	"github.com/dadastory/CloudRevo/pkg/boolset"
+	"github.com/dadastory/CloudRevo/pkg/conf"
+	"github.com/dadastory/CloudRevo/pkg/setting"
 	"github.com/samber/lo"
 )
 
@@ -159,7 +159,7 @@ func (m *Migrator) migratePolicy() (map[int]bool, error) {
 				SetType(node.TypeSlave).
 				SetCapabilities(bs).
 				SetSettings(&types.NodeSetting{
-					Provider: types.DownloaderProviderAria2,
+					Provider: types.DownloaderProviderGopeed,
 				}).
 				Save(context.Background())
 			if err != nil {

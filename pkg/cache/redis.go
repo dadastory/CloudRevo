@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/cloudreve/Cloudreve/v4/pkg/conf"
-	"github.com/cloudreve/Cloudreve/v4/pkg/logging"
+	"github.com/dadastory/CloudRevo/pkg/conf"
+	"github.com/dadastory/CloudRevo/pkg/logging"
 
 	"github.com/gomodule/redigo/redis"
 )

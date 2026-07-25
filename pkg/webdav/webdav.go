@@ -15,20 +15,20 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cloudreve/Cloudreve/v4/application/dependency"
-	"github.com/cloudreve/Cloudreve/v4/ent"
-	"github.com/cloudreve/Cloudreve/v4/inventory"
-	"github.com/cloudreve/Cloudreve/v4/inventory/types"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/fs"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/fs/dbfs"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/lock"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/manager"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/manager/entitysource"
-	"github.com/cloudreve/Cloudreve/v4/pkg/hashid"
-	"github.com/cloudreve/Cloudreve/v4/pkg/logging"
-	"github.com/cloudreve/Cloudreve/v4/pkg/request"
-	"github.com/cloudreve/Cloudreve/v4/pkg/serializer"
-	"github.com/cloudreve/Cloudreve/v4/pkg/util"
+	"github.com/dadastory/CloudRevo/application/dependency"
+	"github.com/dadastory/CloudRevo/ent"
+	"github.com/dadastory/CloudRevo/inventory"
+	"github.com/dadastory/CloudRevo/inventory/types"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/fs"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/fs/dbfs"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/lock"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/manager"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/manager/entitysource"
+	"github.com/dadastory/CloudRevo/pkg/hashid"
+	"github.com/dadastory/CloudRevo/pkg/logging"
+	"github.com/dadastory/CloudRevo/pkg/request"
+	"github.com/dadastory/CloudRevo/pkg/serializer"
+	"github.com/dadastory/CloudRevo/pkg/util"
 	"github.com/gin-gonic/gin"
 	"github.com/samber/lo"
 	"golang.org/x/tools/container/intsets"
@@ -292,14 +292,16 @@ func handleOptions(c *gin.Context, user *ent.User, fm manager.FileManager) (stat
 		if err != nil {
 			return status, err
 		}
-		if target, _, err := fm.SharedAddressTranslation(c, reqPath); err == nil {
+		if target, _, err := fm.SharedAddressTranslation(c, reqPath,
+			dbfs.WithRequiredCapabilities(dbfs.NavigatorCapabilityDownloadFile)); err == nil {
 			allow = allow[:1]
-			read, update, del, create := true, true, true, true
-			if target.OwnerID() != user.ID {
-				update = false
-				del = false
-				create = false
-			}
+			capabilities := target.Capabilities()
+			read := capabilities != nil && capabilities.Enabled(int(dbfs.NavigatorCapabilityDownloadFile))
+			update := capabilities != nil && (capabilities.Enabled(int(dbfs.NavigatorCapabilityVersionControl)) ||
+				capabilities.Enabled(int(dbfs.NavigatorCapabilityUpdateMetadata)))
+			del := capabilities != nil && capabilities.Enabled(int(dbfs.NavigatorCapabilityDeleteFile))
+			create := capabilities != nil && (capabilities.Enabled(int(dbfs.NavigatorCapabilityCreateFile)) ||
+				capabilities.Enabled(int(dbfs.NavigatorCapabilityUploadFile)))
 			if del {
 				allow = append(allow, "DELETE", "MOVE")
 			}
@@ -337,7 +339,8 @@ func handleGetHeadPost(c *gin.Context, user *ent.User, fm manager.FileManager) (
 		return status, err
 	}
 
-	target, _, err := fm.SharedAddressTranslation(c, reqPath)
+	target, _, err := fm.SharedAddressTranslation(c, reqPath,
+		dbfs.WithRequiredCapabilities(dbfs.NavigatorCapabilityDownloadFile))
 	if err != nil {
 		return purposeStatusCodeFromError(err), err
 	}

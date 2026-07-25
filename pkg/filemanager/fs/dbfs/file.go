@@ -6,12 +6,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cloudreve/Cloudreve/v4/ent"
-	"github.com/cloudreve/Cloudreve/v4/inventory"
-	"github.com/cloudreve/Cloudreve/v4/inventory/types"
-	"github.com/cloudreve/Cloudreve/v4/pkg/boolset"
-	"github.com/cloudreve/Cloudreve/v4/pkg/filemanager/fs"
-	"github.com/cloudreve/Cloudreve/v4/pkg/util"
+	"github.com/dadastory/CloudRevo/ent"
+	"github.com/dadastory/CloudRevo/inventory"
+	"github.com/dadastory/CloudRevo/inventory/types"
+	"github.com/dadastory/CloudRevo/pkg/boolset"
+	"github.com/dadastory/CloudRevo/pkg/filemanager/fs"
+	"github.com/dadastory/CloudRevo/pkg/util"
 	"github.com/samber/lo"
 )
 
@@ -221,6 +221,13 @@ func (f *File) View() *types.ExplorerView {
 	}
 
 	return getDefaultView()
+}
+
+func (f *File) ShareAccessRule() *types.ShareAccessRule {
+	if f == nil || f.Model == nil || f.Model.Props == nil {
+		return nil
+	}
+	return f.Model.Props.ShareAccessRule
 }
 
 // UserRoot return the root file from user's view.
