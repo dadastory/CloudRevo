@@ -108,7 +108,7 @@ jobs:
           printf '%s' "${{ steps.build.outputs.digest }}" > "${RUNNER_TEMP}/digests/${{ matrix.image }}-${{ matrix.arch }}"
       - uses: actions/upload-artifact@v4
         with:
-          name: digest-${{ matrix.image }}-${{ matrix.arch }}
+          name: digest-${{ matrix.image }}--${{ matrix.arch }}
           path: ${{ runner.temp }}/digests/${{ matrix.image }}-${{ matrix.arch }}
           if-no-files-found: error
           retention-days: 1
@@ -137,7 +137,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - uses: actions/download-artifact@v4
         with:
-          pattern: digest-${{ matrix.image }}-*
+          pattern: digest-${{ matrix.image }}--*
           path: ${{ runner.temp }}/digests
           merge-multiple: true
       - name: Merge and inspect multi-architecture manifest
