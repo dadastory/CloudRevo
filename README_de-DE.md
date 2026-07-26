@@ -16,7 +16,6 @@
 - [ ] Status für Zusammenarbeit in Echtzeit
 - [ ] Desktop-Synchronisierung
 - [ ] Bereitstellungs- und API-Dokumentation
-- [ ] Weitere Integrationstests
 
 ## Lokal starten
 

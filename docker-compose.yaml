@@ -65,20 +65,6 @@ services:
     restart: unless-stopped
     environment:
       GOPEED_APITOKEN: "${GOPEED_API_TOKEN:?Set GOPEED_API_TOKEN in .env before starting Compose}"
-    read_only: true
-    tmpfs:
-      - /tmp:rw,noexec,nosuid,size=64m
-    cap_drop:
-      - ALL
-    cap_add:
-      - CHOWN
-      - SETGID
-      - SETUID
-    security_opt:
-      - no-new-privileges:true
-    pids_limit: 256
-    mem_limit: 768m
-    cpus: "1.5"
     volumes:
       - ./storage/gopeed:/app/storage
       - ./storage/cloudrevo/temp/gopeed:/app/Downloads

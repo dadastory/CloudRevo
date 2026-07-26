@@ -49,9 +49,35 @@ jobs:
           test "$(node -p "require('./assets/package.json').version")" = "$VERSION"
           ! git ls-remote --exit-code --tags origin "refs/tags/v$VERSION"
 
+  verify-gopeed:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      # Test-only sidecar credential. It is intentionally not a repository
+      # secret and is never part of a published image.
+      GOPEED_API_TOKEN: cloudrevo-ci-gopeed-token
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Validate maintained Gopeed fork
+        run: docker compose --profile test run --build --rm --no-deps gopeed-fork-test
+      - name: Start authenticated Gopeed contract environment
+        run: docker compose --profile test up --build -d gopeed download-fixture
+      - name: Run authenticated Compose Gopeed contracts
+        run: docker compose --profile test run --build --rm --use-aliases gopeed-contract
+      - name: Collect sidecar logs on failure
+        if: failure()
+        run: docker compose --profile test logs gopeed download-fixture
+      - name: Clean Compose test environment
+        if: always()
+        run: docker compose --profile test down --volumes --remove-orphans
+
   build-image:
-    needs: validate-release
-    if: ${{ always() && (github.event_name == 'push' || needs.validate-release.result == 'success') }}
+    needs:
+      - validate-release
+      - verify-gopeed
+    if: ${{ always() && needs.verify-gopeed.result == 'success' && (github.event_name == 'push' || needs.validate-release.result == 'success') }}
     name: Build ${{ matrix.image }} (${{ matrix.platform }})
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
@@ -61,21 +87,25 @@ jobs:
         include:
           - image: cloudrevo
             dockerfile: Dockerfile
+            build_arg: VERSION
             platform: linux/amd64
             arch: amd64
             runner: ubuntu-24.04
           - image: cloudrevo
             dockerfile: Dockerfile
+            build_arg: VERSION
             platform: linux/arm64
             arch: arm64
             runner: ubuntu-24.04-arm
           - image: cloudrevo-gopeed
             dockerfile: .build/gopeed.Dockerfile
+            build_arg: GOPEED_VERSION
             platform: linux/amd64
             arch: amd64
             runner: ubuntu-24.04
           - image: cloudrevo-gopeed
             dockerfile: .build/gopeed.Dockerfile
+            build_arg: GOPEED_VERSION
             platform: linux/arm64
             arch: arm64
             runner: ubuntu-24.04-arm
@@ -98,7 +128,7 @@ jobs:
           file: ${{ matrix.dockerfile }}
           platforms: ${{ matrix.platform }}
           build-args: |
-            VERSION=${{ env.RELEASE_VERSION }}
+            ${{ matrix.build_arg }}=${{ matrix.build_arg == 'VERSION' && env.RELEASE_VERSION || 'v1.9.3' }}
           outputs: type=image,push-by-digest=true,name-canonical=true,push=true,name=${{ env.REGISTRY }}/${{ matrix.image }}
           cache-from: type=gha,scope=${{ matrix.image }}-${{ matrix.arch }}
           cache-to: type=gha,mode=max,scope=${{ matrix.image }}-${{ matrix.arch }}
@@ -168,6 +198,7 @@ jobs:
     if: github.event_name == 'workflow_dispatch'
     needs:
       - validate-release
+      - verify-gopeed
       - merge-image
     runs-on: ubuntu-24.04
     timeout-minutes: 10

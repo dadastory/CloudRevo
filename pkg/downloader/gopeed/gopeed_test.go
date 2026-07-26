@@ -12,11 +12,14 @@ import (
 	"path/filepath"
 	"reflect"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/dadastory/CloudRevo/ent"
 	"github.com/dadastory/CloudRevo/inventory/types"
 	"github.com/dadastory/CloudRevo/pkg/downloader"
+	"github.com/dadastory/CloudRevo/pkg/queue"
 )
 
 func TestNewRejectsIncompletePrivateServiceConfiguration(t *testing.T) {
@@ -128,6 +131,48 @@ func TestCreateTaskForwardsAuthorizedHTTPRequestOptions(t *testing.T) {
 	}
 }
 
+func TestCreateTaskForwardsPrivateNetworkPolicyOnlyToGopeed(t *testing.T) {
+	t.Parallel()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v1/resolve":
+			var payload struct {
+				Opts struct {
+					Extra struct {
+						NetworkPolicy struct {
+							AllowedHosts []string `json:"allowedHosts"`
+							AllowedCIDRs []string `json:"allowedCIDRs"`
+						} `json:"networkPolicy"`
+					} `json:"extra"`
+				} `json:"opts"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+				t.Fatalf("decode resolve payload: %v", err)
+			}
+			if !reflect.DeepEqual(payload.Opts.Extra.NetworkPolicy.AllowedHosts, []string{"files.internal.example"}) || !reflect.DeepEqual(payload.Opts.Extra.NetworkPolicy.AllowedCIDRs, []string{"192.168.10.0/24"}) {
+				t.Fatalf("unexpected private network policy: %#v", payload.Opts.Extra.NetworkPolicy)
+			}
+			writeResult(t, w, http.StatusOK, map[string]any{"id": "resolve-policy"})
+		case "/api/v1/tasks":
+			writeResult(t, w, http.StatusOK, "task-policy")
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	client := newClient(server.URL, "test-token", "/app/Downloads", "/cloudrevo/data/temp/gopeed", nil)
+	_, err := client.CreateTaskWithOptions(context.Background(), "https://downloads.example.test/file", nil, nil, &downloader.TaskOptions{
+		NetworkPolicy: &downloader.NetworkPolicy{
+			AllowedHosts: []string{"files.internal.example"},
+			AllowedCIDRs: []string{"192.168.10.0/24"},
+		},
+	}, nil)
+	if err != nil {
+		t.Fatalf("CreateTaskWithOptions() error = %v", err)
+	}
+}
+
 func TestCreateTaskClassifiesSourceHTTP403AsTerminal(t *testing.T) {
 
 	t.Parallel()
@@ -148,6 +193,37 @@ func TestCreateTaskClassifiesSourceHTTP403AsTerminal(t *testing.T) {
 	}
 	if sourceErr.StatusCode != http.StatusForbidden {
 		t.Fatalf("source status = %d, want %d", sourceErr.StatusCode, http.StatusForbidden)
+	}
+}
+
+func TestGopeedAPIErrorsRedactSecretsAndPrivatePaths(t *testing.T) {
+	t.Parallel()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		writeResultWithCode(t, w, http.StatusOK, 1000,
+			"download failed https://downloads.example.test/file?token=source-token&X-Amz-Signature=signature-value Authorization: Bearer header-token Cookie=session=private Body=private-request-body /cloudrevo/data/temp/gopeed/task-1",
+			nil)
+	}))
+	defer server.Close()
+
+	client := newClient(server.URL, "header-token", "/app/Downloads", "/cloudrevo/data/temp/gopeed", nil)
+	_, err := client.Test(context.Background())
+	if err == nil {
+		t.Fatal("Test() error = nil")
+	}
+	message := err.Error()
+	for _, secret := range []string{"source-token", "signature-value", "header-token", "session=private", "private-request-body", "/cloudrevo/data/temp/gopeed"} {
+		if strings.Contains(message, secret) {
+			t.Fatalf("Gopeed error leaked %q: %s", secret, message)
+		}
+	}
+	if !strings.Contains(message, "download failed") || !strings.Contains(message, "downloads.example.test/file") {
+		t.Fatalf("safe diagnostic context was not retained: %s", message)
+	}
+
+	queued := &queue.DBTask{Task: &ent.Task{PublicState: &types.TaskPublicState{}}}
+	queued.OnError(err, 0)
+	if queued.Task.PublicState.Error != message {
+		t.Fatalf("queue persistence changed sanitized error: %q", queued.Task.PublicState.Error)
 	}
 }
 
@@ -265,6 +341,29 @@ func TestInfoUsesFirstFileNameWhenTaskAndResourceNamesAreEmpty(t *testing.T) {
 	}
 }
 
+func TestInfoCompletesSelectedBitTorrentFilesWithoutLiveCounters(t *testing.T) {
+	t.Parallel()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		writeResult(t, w, http.StatusOK, map[string]any{
+			"id": "task-1", "status": "done", "size": 42,
+			"meta": map[string]any{
+				"opts": map[string]any{"selectFiles": []int{0}},
+				"res":  map[string]any{"files": []map[string]any{{"name": "release.iso", "size": 42}}},
+			},
+		})
+	}))
+	defer server.Close()
+
+	client := newClient(server.URL, "test-token", "/app/Downloads", "/cloudrevo/data/temp/gopeed", nil)
+	status, err := client.Info(context.Background(), &downloader.TaskHandle{ID: "task-1", Hash: "c53314ac-3795-4ef4-a677-c546dfe4bf93"})
+	if err != nil {
+		t.Fatalf("Info() error = %v", err)
+	}
+	if len(status.Files) != 1 || !status.Files[0].ProgressKnown || status.Files[0].Progress != 1 {
+		t.Fatalf("terminal BitTorrent file progress = %#v", status.Files)
+	}
+}
+
 func TestCreateTaskForwardsValidatedTaskConnections(t *testing.T) {
 	t.Parallel()
 
@@ -298,6 +397,73 @@ func TestCreateTaskForwardsValidatedTaskConnections(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateTaskWithOptions() error = %v", err)
 	}
+}
+
+func TestHTTPTaskOptionsEnableInternalTorrentHandoff(t *testing.T) {
+	t.Parallel()
+
+	options := gopeedTaskOptions("https://downloads.example.test/download?id=fixture", nil, nil, nil)
+	if options["autoTorrent"] != true || options["deleteTorrentAfterDownload"] != false {
+		t.Fatalf("HTTP task options = %#v, want internal torrent handoff", options)
+	}
+	if nonHTTP := gopeedTaskOptions("magnet:?xt=urn:btih:fixture", nil, nil, nil); nonHTTP["autoTorrent"] != nil {
+		t.Fatalf("magnet task options unexpectedly enabled HTTP torrent handoff: %#v", nonHTTP)
+	}
+}
+
+func TestInfoMapsGopeedWaitingStateWithoutActiveTransfer(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		writeResult(t, w, http.StatusOK, map[string]any{
+			"id": "task-wait", "status": "wait", "size": 42,
+			"meta": map[string]any{"opts": map[string]any{}, "res": map[string]any{"name": "queued.iso"}},
+		})
+	}))
+	defer server.Close()
+
+	client := newClient(server.URL, "test-token", "/app/Downloads", "/cloudrevo/data/temp/gopeed", nil)
+	status, err := client.Info(context.Background(), &downloader.TaskHandle{ID: "task-wait", Hash: "c53314ac-3795-4ef4-a677-c546dfe4bf93"})
+	if err != nil {
+		t.Fatalf("Info() error = %v", err)
+	}
+	if status.State != downloader.Status("waiting") {
+		t.Fatalf("waiting state = %q, want waiting", status.State)
+	}
+	if status.DownloadSpeed != 0 || status.Downloaded != 0 {
+		t.Fatalf("waiting task reported active transfer: %#v", status)
+	}
+}
+
+func TestConnectionDefaultsPreferTaskThenGroupThenNode(t *testing.T) {
+	t.Parallel()
+	var got []int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v1/resolve":
+			var payload struct {
+				Opts struct{ Extra struct{ Connections int `json:"connections"` } `json:"extra"` } `json:"opts"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil { t.Fatalf("decode options: %v", err) }
+			got = append(got, payload.Opts.Extra.Connections)
+			writeResult(t, w, http.StatusOK, map[string]any{"id": "resolve"})
+		case "/api/v1/tasks":
+			writeResult(t, w, http.StatusOK, "task")
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	client := newClient(server.URL, "test-token", "/app/Downloads", "/cloudrevo/data/temp/gopeed", map[string]any{"connections": 8})
+	for _, test := range []struct { task *downloader.TaskOptions; group map[string]interface{}; want int }{
+		{&downloader.TaskOptions{Connections: 32}, map[string]interface{}{"connections": 16}, 32},
+		{nil, map[string]interface{}{"connections": 16}, 16},
+		{nil, map[string]interface{}{"connections": 999}, 8},
+	} {
+		if _, err := client.CreateTaskWithOptions(context.Background(), "https://downloads.example.test/file", test.group, nil, test.task, nil); err != nil { t.Fatalf("create task: %v", err) }
+	}
+	if !reflect.DeepEqual(got, []int{32, 16, 8}) { t.Fatalf("connections = %v, want [32 16 8]", got) }
 }
 
 func TestCreateTaskIgnoresLegacyGroupOptions(t *testing.T) {
@@ -378,6 +544,48 @@ func TestCancelTreatsMissingGopeedTaskAsAlreadyCleanedUp(t *testing.T) {
 	client := newClient(server.URL, "test-token", "/app/Downloads", tempRoot, nil)
 	if err := client.Cancel(context.Background(), &downloader.TaskHandle{ID: "missing", Hash: "c53314ac-3795-4ef4-a677-c546dfe4bf93"}); err != nil {
 		t.Fatalf("Cancel() error = %v", err)
+	}
+}
+
+func TestPauseAndContinueUseTheExistingGopeedTaskHandle(t *testing.T) {
+	t.Parallel()
+	var requests []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests = append(requests, r.Method+" "+r.URL.Path)
+		writeResult(t, w, http.StatusOK, nil)
+	}))
+	defer server.Close()
+
+	client := newClient(server.URL, "test-token", "/app/Downloads", "/cloudrevo/data/temp/gopeed", nil)
+	handle := &downloader.TaskHandle{ID: "task-1", Hash: "task-path"}
+	if err := client.Pause(context.Background(), handle); err != nil {
+		t.Fatalf("Pause() error = %v", err)
+	}
+	if err := client.Continue(context.Background(), handle); err != nil {
+		t.Fatalf("Continue() error = %v", err)
+	}
+	if !reflect.DeepEqual(requests, []string{"PUT /api/v1/tasks/task-1/pause", "PUT /api/v1/tasks/task-1/continue"}) {
+		t.Fatalf("control requests = %#v", requests)
+	}
+}
+
+func TestInfoRedactsTaskErrorTelemetry(t *testing.T) {
+	t.Parallel()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		writeResult(t, w, http.StatusOK, map[string]any{
+			"id": "task-1", "status": "error", "error": "failed https://example.test/file?token=secret Authorization: Bearer secret-token",
+			"meta": map[string]any{"opts": map[string]any{}, "res": map[string]any{}},
+		})
+	}))
+	defer server.Close()
+
+	client := newClient(server.URL, "test-token", "/app/Downloads", "/cloudrevo/data/temp/gopeed", nil)
+	status, err := client.Info(context.Background(), &downloader.TaskHandle{ID: "task-1", Hash: "c53314ac-3795-4ef4-a677-c546dfe4bf93"})
+	if err != nil {
+		t.Fatalf("Info() error = %v", err)
+	}
+	if strings.Contains(status.ErrorMessage, "secret") || !strings.Contains(status.ErrorMessage, "example.test/file") {
+		t.Fatalf("task error telemetry was not sanitized: %q", status.ErrorMessage)
 	}
 }
 

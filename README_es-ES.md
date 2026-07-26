@@ -16,7 +16,6 @@
 - [ ] Indicadores de colaboración en tiempo real
 - [ ] Sincronización de escritorio
 - [ ] Documentación de despliegue y API
-- [ ] Más pruebas de integración
 
 ## Inicio local
 

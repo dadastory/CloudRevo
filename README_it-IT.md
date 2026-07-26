@@ -16,7 +16,6 @@
 - [ ] Indicatori di collaborazione in tempo reale
 - [ ] Sincronizzazione desktop
 - [ ] Documentazione di distribuzione e API
-- [ ] Altri test di integrazione
 
 ## Avvio locale
 

@@ -49,7 +49,6 @@
 - [ ] Real-time collaboration indicators
 - [ ] Desktop sync support
 - [ ] Deployment and API documentation
-- [ ] More integration tests
 
 ## Community
 

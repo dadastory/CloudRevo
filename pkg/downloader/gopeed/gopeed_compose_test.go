@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha1"
+	"encoding/hex"
 	"errors"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -22,6 +24,11 @@ func bencodeString(value string) []byte {
 }
 
 func torrentWithWebSeed(name, webSeed string, payload []byte) []byte {
+	torrent, _ := torrentWithWebSeedInfoHash(name, webSeed, payload)
+	return torrent
+}
+
+func torrentWithWebSeedInfoHash(name, webSeed string, payload []byte) ([]byte, string) {
 	const pieceLength = 16 * 1024
 	pieces := make([]byte, 0, ((len(payload)+pieceLength-1)/pieceLength)*sha1.Size)
 	for offset := 0; offset < len(payload); offset += pieceLength {
@@ -49,7 +56,8 @@ func torrentWithWebSeed(name, webSeed string, payload []byte) []byte {
 	torrent.Write(bencodeString(webSeed))
 	torrent.WriteByte('e')
 	torrent.WriteByte('e')
-	return torrent.Bytes()
+	infoHash := sha1.Sum(info.Bytes())
+	return torrent.Bytes(), hex.EncodeToString(infoHash[:])
 }
 
 func TestComposeGopeedDownloadContract(t *testing.T) {
@@ -206,6 +214,106 @@ func TestComposeGopeedRequestLifecycleContract(t *testing.T) {
 	}
 }
 
+func TestComposeGopeedPauseAndContinueContract(t *testing.T) {
+	server := os.Getenv("GOPEED_CONTRACT_URL")
+	token := os.Getenv("GOPEED_CONTRACT_TOKEN")
+	sourceHost := os.Getenv("GOPEED_CONTRACT_SOURCE_HOST")
+	if server == "" || token == "" {
+		t.Skip("Gopeed Compose contract is enabled only by the Compose test profile")
+	}
+	if sourceHost == "" {
+		t.Fatal("GOPEED_CONTRACT_SOURCE_HOST must name the private Compose test service")
+	}
+
+	listener, err := net.Listen("tcp", "0.0.0.0:0")
+	if err != nil {
+		t.Fatalf("listen for pause fixture: %v", err)
+	}
+	defer listener.Close()
+	_, port, err := net.SplitHostPort(listener.Addr().String())
+	if err != nil {
+		t.Fatalf("split pause fixture address: %v", err)
+	}
+
+	chunk := bytes.Repeat([]byte("p"), 32*1024)
+	const chunks = 80
+	fixture := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/slow.bin" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Length", strconv.Itoa(len(chunk)*chunks))
+		flusher, _ := w.(http.Flusher)
+		for index := 0; index < chunks; index++ {
+			_, _ = w.Write(chunk)
+			if flusher != nil {
+				flusher.Flush()
+			}
+			time.Sleep(35 * time.Millisecond)
+		}
+	})}
+	go func() { _ = fixture.Serve(listener) }()
+	defer fixture.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Second)
+	defer cancel()
+	client := newClient(server, token, "/app/Downloads", "/cloudrevo/data/temp/gopeed", nil)
+	handle, err := client.CreateTask(ctx, "http://"+sourceHost+":"+port+"/slow.bin", nil)
+	if err != nil {
+		t.Fatalf("create pausable task: %v", err)
+	}
+	defer func() { _ = client.Cancel(context.Background(), handle) }()
+
+	for ctx.Err() == nil {
+		status, err := client.Info(ctx, handle)
+		if err != nil {
+			t.Fatalf("read task before pause: %v", err)
+		}
+		if status.Downloaded > 0 {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	if ctx.Err() != nil {
+		t.Fatal("task never started before pause")
+	}
+	if err := client.Pause(ctx, handle); err != nil {
+		t.Fatalf("pause Gopeed task: %v", err)
+	}
+
+	paused := false
+	for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); time.Sleep(100 * time.Millisecond) {
+		status, err := client.Info(ctx, handle)
+		if err != nil {
+			t.Fatalf("read paused task: %v", err)
+		}
+		if status.State == downloader.StatusPaused {
+			paused = true
+			break
+		}
+	}
+	if !paused {
+		t.Fatal("Gopeed task did not enter paused state")
+	}
+	if err := client.Continue(ctx, handle); err != nil {
+		t.Fatalf("continue Gopeed task: %v", err)
+	}
+	for ctx.Err() == nil {
+		status, err := client.Info(ctx, handle)
+		if err != nil {
+			t.Fatalf("read continued task: %v", err)
+		}
+		if status.State == downloader.StatusCompleted {
+			return
+		}
+		if status.State == downloader.StatusError {
+			t.Fatalf("continued task failed: %s", status.ErrorMessage)
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	t.Fatalf("continued task did not finish: %v", ctx.Err())
+}
+
 func TestComposeGopeedBitTorrentTelemetryContract(t *testing.T) {
 	server := os.Getenv("GOPEED_CONTRACT_URL")
 	token := os.Getenv("GOPEED_CONTRACT_TOKEN")
@@ -264,7 +372,7 @@ func TestComposeGopeedBitTorrentTelemetryContract(t *testing.T) {
 		t.Fatalf("create local BitTorrent task: %v", err)
 	}
 
-	btHandle := &downloader.TaskHandle{Hash: handle.Hash}
+	btHandle := &downloader.TaskHandle{Hash: handle.Hash, ParentID: handle.ID}
 	var status *downloader.TaskStatus
 	for ctx.Err() == nil {
 		var tasks []task
@@ -272,8 +380,8 @@ func TestComposeGopeedBitTorrentTelemetryContract(t *testing.T) {
 			t.Fatalf("list local BitTorrent tasks: %v", err)
 		}
 		for _, candidate := range tasks {
-			if candidate.Protocol == "bt" {
-				btHandle.ID = candidate.ID
+			if candidate.ID == handle.ID && candidate.FollowedBy != "" {
+				btHandle.ID = candidate.FollowedBy
 				break
 			}
 		}
@@ -305,7 +413,7 @@ func TestComposeGopeedBitTorrentTelemetryContract(t *testing.T) {
 	}
 }
 
-func TestComposeGopeedDirectTorrentURLFollowsNativeBitTorrentTask(t *testing.T) {
+func TestComposeGopeedDescriptorEndpointFollowsNativeBitTorrentTask(t *testing.T) {
 	server := os.Getenv("GOPEED_CONTRACT_URL")
 	token := os.Getenv("GOPEED_CONTRACT_TOKEN")
 	sourceHost := os.Getenv("GOPEED_CONTRACT_SOURCE_HOST")
@@ -331,8 +439,9 @@ func TestComposeGopeedDirectTorrentURLFollowsNativeBitTorrentTask(t *testing.T) 
 	torrentData := torrentWithWebSeed("direct-fixture.bin", baseURL+"/payload/", payload)
 	fixture := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case "/direct.torrent":
+		case "/download":
 			w.Header().Set("Content-Type", "application/x-bittorrent")
+			w.Header().Set("Content-Disposition", `attachment; filename="direct-fixture.torrent"`)
 			_, _ = w.Write(torrentData)
 		case "/payload/direct-fixture.bin":
 			w.Header().Set("Content-Length", strconv.Itoa(len(payload)))
@@ -347,7 +456,7 @@ func TestComposeGopeedDirectTorrentURLFollowsNativeBitTorrentTask(t *testing.T) 
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	client := newClient(server, token, "/app/Downloads", "/cloudrevo/data/temp/gopeed", nil)
-	handle, err := client.CreateTask(ctx, baseURL+"/direct.torrent", nil)
+	handle, err := client.CreateTaskWithOptions(ctx, baseURL+"/download?id=fixture", nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("create direct torrent URL task: %v", err)
 	}
@@ -356,7 +465,7 @@ func TestComposeGopeedDirectTorrentURLFollowsNativeBitTorrentTask(t *testing.T) 
 	for ctx.Err() == nil {
 		status, err := client.Info(ctx, handle)
 		if err != nil {
-			t.Fatalf("read direct torrent URL task: %v", err)
+			t.Fatalf("read descriptor endpoint task: %v", err)
 		}
 		if status.FollowedBy != nil {
 			handle = status.FollowedBy
@@ -370,5 +479,102 @@ func TestComposeGopeedDirectTorrentURLFollowsNativeBitTorrentTask(t *testing.T) 
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	t.Fatal("direct .torrent URL never followed a native BitTorrent task")
+	t.Fatal("descriptor endpoint never followed a native BitTorrent task")
+}
+
+func TestComposeGopeedMagnetTaskLifecycleContract(t *testing.T) {
+	server := os.Getenv("GOPEED_CONTRACT_URL")
+	token := os.Getenv("GOPEED_CONTRACT_TOKEN")
+	sourceHost := os.Getenv("GOPEED_CONTRACT_SOURCE_HOST")
+	if server == "" || token == "" {
+		t.Skip("Gopeed Compose contract is enabled only by the Compose test profile")
+	}
+	if sourceHost == "" {
+		t.Fatal("GOPEED_CONTRACT_SOURCE_HOST must name the private Compose test service")
+	}
+
+	listener, err := net.Listen("tcp", "0.0.0.0:0")
+	if err != nil {
+		t.Fatalf("listen for local Magnet fixture: %v", err)
+	}
+	defer listener.Close()
+	_, port, err := net.SplitHostPort(listener.Addr().String())
+	if err != nil {
+		t.Fatalf("split local Magnet fixture address: %v", err)
+	}
+
+	payload := bytes.Repeat([]byte("CloudRevo local Magnet fixture.\n"), 512)
+	baseURL := "http://" + sourceHost + ":" + port
+	torrentData, infoHash := torrentWithWebSeedInfoHash("magnet-fixture.bin", baseURL+"/payload/", payload)
+	fixture := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/fixture.torrent":
+			w.Header().Set("Content-Type", "application/x-bittorrent")
+			_, _ = w.Write(torrentData)
+		case "/payload/magnet-fixture.bin":
+			w.Header().Set("Content-Length", strconv.Itoa(len(payload)))
+			_, _ = w.Write(payload)
+		default:
+			http.NotFound(w, r)
+		}
+	})}
+	go func() { _ = fixture.Serve(listener) }()
+	defer fixture.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	magnet := "magnet:?xt=urn:btih:" + infoHash + "&dn=magnet-fixture.bin&xl=" + strconv.Itoa(len(payload)) + "&ws=" + url.QueryEscape(baseURL+"/payload/magnet-fixture.bin") + "&xs=" + url.QueryEscape(baseURL+"/fixture.torrent")
+	client := newClient(server, token, "/app/Downloads", "/cloudrevo/data/temp/gopeed", nil)
+	handle, err := client.CreateTask(ctx, magnet, nil)
+	if err != nil {
+		t.Fatalf("create local Magnet task: %v", err)
+	}
+	defer func() { _ = client.Cancel(context.Background(), handle) }()
+
+	var status *downloader.TaskStatus
+	for ctx.Err() == nil {
+		status, err = client.Info(ctx, handle)
+		if err != nil {
+			t.Fatalf("read local Magnet task: %v", err)
+		}
+		if status.State == downloader.StatusError {
+			t.Fatalf("local Magnet task failed: %#v", status)
+		}
+		if status.Name == "magnet-fixture.bin" && len(status.Files) == 1 && status.Hash != "" {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	if ctx.Err() != nil {
+		t.Fatal("timed out waiting for local Magnet metadata")
+	}
+	if err := client.Cancel(ctx, handle); err != nil {
+		t.Fatalf("cancel local Magnet task: %v", err)
+	}
+	if _, err := os.Stat(status.SavePath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("temporary Magnet task directory still exists after cleanup: %v", err)
+	}
+}
+
+func TestComposeGopeedED2KDirectTaskContract(t *testing.T) {
+	server := os.Getenv("GOPEED_CONTRACT_URL")
+	token := os.Getenv("GOPEED_CONTRACT_TOKEN")
+	if server == "" || token == "" {
+		t.Skip("Gopeed Compose contract is enabled only by the Compose test profile")
+	}
+
+	// eD2K is queued directly, just as the product flow does. The contract
+	// proves task construction and immediately cleans it up; it does not depend
+	// on a public peer becoming available.
+	client := newClient(server, token, "/app/Downloads", "/cloudrevo/data/temp/gopeed", nil)
+	handle, err := client.CreateTaskWithOptions(context.Background(), "ed2k://|file|cloudrevo-fixture.bin|1|0123456789ABCDEF0123456789ABCDEF|/", nil, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("create direct ED2K source: %v", err)
+	}
+	if handle == nil || handle.ID == "" {
+		t.Fatalf("unexpected ED2K task handle: %#v", handle)
+	}
+	if err := client.Cancel(context.Background(), handle); err != nil {
+		t.Fatalf("clean up direct ED2K task: %v", err)
+	}
 }

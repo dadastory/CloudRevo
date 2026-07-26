@@ -39,6 +39,12 @@ type (
 	PreviewDownloader interface {
 		PreviewTask(ctx context.Context, url string, options map[string]interface{}, requestOptions *RequestOptions, taskOptions *TaskOptions) (*TaskStatus, error)
 	}
+	// ControllableDownloader can pause and continue an existing non-terminal
+	// task without replacing its handle or workspace.
+	ControllableDownloader interface {
+		Pause(ctx context.Context, handle *TaskHandle) error
+		Continue(ctx context.Context, handle *TaskHandle) error
+	}
 	// RequestOptions holds validated HTTP request context for a single remote download.
 	// It is stored by the workflow in private task state only.
 	RequestOptions struct {
@@ -53,6 +59,16 @@ type (
 		// AutoTorrent is set only by the workflow for a CloudRevo-hosted
 		// torrent file. It deliberately cannot be supplied through the API.
 		AutoTorrent bool `json:"-"`
+		// NetworkPolicy is generated from the assigned node's existing SSRF
+		// configuration immediately before a Gopeed request. It is deliberately
+		// excluded from workflow JSON and public task state.
+		NetworkPolicy *NetworkPolicy `json:"-"`
+	}
+	// NetworkPolicy carries an already-authorized node policy to Gopeed's
+	// private sidecar. It is task-scoped and never accepted from API input.
+	NetworkPolicy struct {
+		AllowedHosts []string
+		AllowedCIDRs []string
 	}
 	// SourceHTTPError identifies an HTTP response returned by the requested
 	// download source, rather than by the downloader service itself.
@@ -108,8 +124,10 @@ func (e *SourceHTTPError) IsClientError() bool {
 }
 
 const (
+	StatusWaiting     Status = "waiting"
 	StatusDownloading Status = "downloading"
 	StatusSeeding     Status = "seeding"
+	StatusPaused      Status = "paused"
 	StatusCompleted   Status = "completed"
 	StatusError       Status = "error"
 	StatusUnknown     Status = "unknown"

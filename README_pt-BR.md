@@ -16,7 +16,6 @@
 - [ ] Indicadores de colaboração em tempo real
 - [ ] Sincronização para desktop
 - [ ] Documentação de implantação e API
-- [ ] Mais testes de integração
 
 ## Início local
 

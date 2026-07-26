@@ -206,9 +206,9 @@ func (m *RemoteDownloadTask) createDownloadTask(ctx context.Context, dep depende
 	// host(s) always added to the allowlist. We don't validate SrcFileUri
 	// resolution because that's a CloudRevo-internal entity URL pointing at
 	// the user's own torrent file.
+	ssrfOptions := buildSSRFOptions(ctx, dep, m.node.Settings(ctx))
 	if m.state.SrcUri != "" {
-		opt := buildSSRFOptions(ctx, dep, m.node.Settings(ctx))
-		if err := request.ValidateExternalURL(ctx, m.state.SrcUri, opt); err != nil {
+		if err := request.ValidateExternalURL(ctx, m.state.SrcUri, ssrfOptions); err != nil {
 			return task.StatusError, fmt.Errorf("url rejected: %s (%w)", err, queue.CriticalErr)
 		}
 	}
@@ -245,12 +245,14 @@ func (m *RemoteDownloadTask) createDownloadTask(ctx context.Context, dep depende
 		handle *downloader.TaskHandle
 		err    error
 	)
-	if len(m.state.SelectedFiles) > 0 || m.state.TaskOptions != nil {
-		selectedDownloader, ok := m.d.(downloader.SelectedFilesDownloader)
-		if !ok {
-			return task.StatusError, fmt.Errorf("configured downloader does not support preselected files: %w", queue.CriticalErr)
-		}
-		handle, err = selectedDownloader.CreateTaskWithOptions(ctx, torrentUrl, user.Edges.Group.Settings.RemoteDownloadOptions, m.state.RequestOptions, m.state.TaskOptions, m.state.SelectedFiles)
+	if selectedDownloader, ok := m.d.(downloader.SelectedFilesDownloader); ok {
+		// Gopeed implements this richer contract even when the user did not
+		// choose files or tune a task option. Always prefer it so its
+		// task-scoped outbound policy covers ordinary HTTP, magnets, and
+		// CloudRevo-hosted torrent descriptors alike.
+		handle, err = selectedDownloader.CreateTaskWithOptions(ctx, torrentUrl, user.Edges.Group.Settings.RemoteDownloadOptions, m.state.RequestOptions, WithNetworkPolicy(m.state.TaskOptions, ssrfOptions), m.state.SelectedFiles)
+	} else if len(m.state.SelectedFiles) > 0 || m.state.TaskOptions != nil {
+		return task.StatusError, fmt.Errorf("configured downloader does not support preselected files: %w", queue.CriticalErr)
 	} else if m.state.RequestOptions != nil {
 		requestDownloader, ok := m.d.(downloader.RequestOptionsDownloader)
 		if !ok {
@@ -271,6 +273,25 @@ func (m *RemoteDownloadTask) createDownloadTask(ctx context.Context, dep depende
 	m.state.Handle = handle
 	m.state.Phase = RemoteDownloadTaskPhaseMonitor
 	return task.StatusSuspending, nil
+}
+
+// WithNetworkPolicy passes the same allowlist already used by task-time URL
+// validation into Gopeed's private HTTP transport. It intentionally creates a
+// transient copy: node policy is never persisted in task JSON or exposed in a
+// public task response.
+func WithNetworkPolicy(options *downloader.TaskOptions, ssrf request.SSRFOptions) *downloader.TaskOptions {
+	cloned := cloneTaskOptions(options)
+	if cloned == nil {
+		cloned = &downloader.TaskOptions{}
+	}
+	if ssrf.Disabled {
+		return cloned
+	}
+	cloned.NetworkPolicy = &downloader.NetworkPolicy{
+		AllowedHosts: append([]string(nil), ssrf.AllowedHosts...),
+		AllowedCIDRs: append([]string(nil), ssrf.AllowedCIDRs...),
+	}
+	return cloned
 }
 
 // buildSSRFOptions composes the SSRF policy for a download: the assigned
@@ -377,7 +398,7 @@ func (m *RemoteDownloadTask) monitor(ctx context.Context, dep dependency.Dep) (t
 		// Seeding complete
 		m.l.Info("Download task seeding completed")
 		return task.StatusCompleted, nil
-	case downloader.StatusDownloading:
+	case downloader.StatusWaiting, downloader.StatusDownloading, downloader.StatusPaused:
 		m.ResumeAfter(resumeAfter)
 		return task.StatusSuspending, nil
 	case downloader.StatusUnknown, downloader.StatusError:
@@ -871,6 +892,58 @@ func (m *RemoteDownloadTask) CancelDownload(ctx context.Context) error {
 	return m.d.Cancel(ctx, m.state.Handle)
 }
 
+// ControlDownload keeps the existing remote task handle and workspace while
+// delegating pause or continue to a downloader that explicitly supports it.
+func (m *RemoteDownloadTask) ControlDownload(ctx context.Context, resume bool) error {
+	if m.state == nil {
+		state := &RemoteDownloadTaskState{}
+		if err := json.Unmarshal([]byte(m.State()), state); err != nil {
+			return fmt.Errorf("failed to unmarshal state: %w", err)
+		}
+		m.state = state
+	}
+	if m.state.Handle == nil {
+		return fmt.Errorf("remote download has not started")
+	}
+	if m.d == nil {
+		dep := dependency.FromContext(ctx)
+		node, err := allocateNode(ctx, dep, &m.state.NodeState, types.NodeCapabilityRemoteDownload)
+		if err != nil {
+			return fmt.Errorf("failed to allocate node: %w", err)
+		}
+		d, err := node.CreateDownloader(ctx, dep.RequestClient(), dep.SettingProvider())
+		if err != nil {
+			return fmt.Errorf("failed to create downloader: %w", err)
+		}
+		m.node = node
+		m.d = d
+	}
+	controller, ok := m.d.(downloader.ControllableDownloader)
+	if !ok {
+		return fmt.Errorf("configured downloader does not support pause and continue")
+	}
+	var err error
+	if resume {
+		err = controller.Continue(ctx, m.state.Handle)
+	} else {
+		err = controller.Pause(ctx, m.state.Handle)
+	}
+	if err != nil {
+		return err
+	}
+	if status, err := m.d.Info(ctx, m.state.Handle); err == nil {
+		m.state.Status = status
+	}
+	state, err := json.Marshal(m.state)
+	if err != nil {
+		return fmt.Errorf("failed to marshal state: %w", err)
+	}
+	m.Lock()
+	m.Task.PrivateState = string(state)
+	m.Unlock()
+	return nil
+}
+
 const (
 	maxRemoteDownloadHeaders    = 16
 	maxRemoteDownloadHeaderSize = 4096
@@ -971,7 +1044,14 @@ func cloneTaskOptions(options *downloader.TaskOptions) *downloader.TaskOptions {
 	if options == nil {
 		return nil
 	}
-	return &downloader.TaskOptions{Connections: options.Connections, AutoTorrent: options.AutoTorrent}
+	cloned := &downloader.TaskOptions{Connections: options.Connections, AutoTorrent: options.AutoTorrent}
+	if options.NetworkPolicy != nil {
+		cloned.NetworkPolicy = &downloader.NetworkPolicy{
+			AllowedHosts: append([]string(nil), options.NetworkPolicy.AllowedHosts...),
+			AllowedCIDRs: append([]string(nil), options.NetworkPolicy.AllowedCIDRs...),
+		}
+	}
+	return cloned
 }
 
 func torrentTaskOptions(options *downloader.TaskOptions) *downloader.TaskOptions {

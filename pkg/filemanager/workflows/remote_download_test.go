@@ -12,7 +12,36 @@ import (
 	"github.com/dadastory/CloudRevo/ent"
 	"github.com/dadastory/CloudRevo/inventory"
 	"github.com/dadastory/CloudRevo/pkg/downloader"
+	"github.com/dadastory/CloudRevo/pkg/request"
 )
+
+type controllableTestDownloader struct {
+	paused    bool
+	continued bool
+	status    *downloader.TaskStatus
+}
+
+func (d *controllableTestDownloader) CreateTask(context.Context, string, map[string]interface{}) (*downloader.TaskHandle, error) {
+	return nil, nil
+}
+func (d *controllableTestDownloader) Info(context.Context, *downloader.TaskHandle) (*downloader.TaskStatus, error) {
+	return d.status, nil
+}
+func (d *controllableTestDownloader) Cancel(context.Context, *downloader.TaskHandle) error {
+	return nil
+}
+func (d *controllableTestDownloader) SetFilesToDownload(context.Context, *downloader.TaskHandle, ...*downloader.SetFileToDownloadArgs) error {
+	return nil
+}
+func (d *controllableTestDownloader) Test(context.Context) (string, error) { return "", nil }
+func (d *controllableTestDownloader) Pause(context.Context, *downloader.TaskHandle) error {
+	d.paused = true
+	return nil
+}
+func (d *controllableTestDownloader) Continue(context.Context, *downloader.TaskHandle) error {
+	d.continued = true
+	return nil
+}
 
 func TestRemoteDownloadTransferReadinessRequiresMaterializedSelectedFiles(t *testing.T) {
 	dir := t.TempDir()
@@ -38,6 +67,56 @@ func TestRemoteDownloadTransferReadinessRequiresMaterializedSelectedFiles(t *tes
 	}
 	if !remoteDownloadReadyForTransfer(status) {
 		t.Fatal("materialized fully downloaded seeding task must be transferable")
+	}
+}
+
+func TestRemoteDownloadPausedStatusIsNotTransferReady(t *testing.T) {
+	status := &downloader.TaskStatus{State: downloader.StatusPaused, SavePath: t.TempDir()}
+	if remoteDownloadReadyForTransfer(status) {
+		t.Fatal("paused remote download must remain in the monitor phase")
+	}
+}
+
+func TestControlDownloadPreservesExistingHandleAndPersistsLiveStatus(t *testing.T) {
+	ctx := context.WithValue(context.Background(), inventory.UserCtx{}, &ent.User{ID: 1})
+	queued, err := NewRemoteDownloadTask(ctx, "https://downloads.example.test/file", "", "/My", nil)
+	if err != nil {
+		t.Fatalf("NewRemoteDownloadTask() error = %v", err)
+	}
+	remote := queued.(*RemoteDownloadTask)
+	state := &RemoteDownloadTaskState{}
+	if err := json.Unmarshal([]byte(remote.State()), state); err != nil {
+		t.Fatalf("unmarshal task state: %v", err)
+	}
+	state.Handle = &downloader.TaskHandle{ID: "gopeed-task", Hash: "workspace"}
+	encoded, err := json.Marshal(state)
+	if err != nil {
+		t.Fatalf("marshal task state: %v", err)
+	}
+	remote.Task.PrivateState = string(encoded)
+	controlled := &controllableTestDownloader{status: &downloader.TaskStatus{State: downloader.StatusPaused}}
+	remote.d = controlled
+
+	if err := remote.ControlDownload(context.Background(), false); err != nil {
+		t.Fatalf("pause remote task: %v", err)
+	}
+	if !controlled.paused || controlled.continued {
+		t.Fatalf("unexpected pause calls: %#v", controlled)
+	}
+	persisted := &RemoteDownloadTaskState{}
+	if err := json.Unmarshal([]byte(remote.State()), persisted); err != nil {
+		t.Fatalf("unmarshal persisted state: %v", err)
+	}
+	if persisted.Handle == nil || persisted.Handle.ID != "gopeed-task" || persisted.Status == nil || persisted.Status.State != downloader.StatusPaused {
+		t.Fatalf("pause did not preserve task state: %#v", persisted)
+	}
+
+	controlled.status = &downloader.TaskStatus{State: downloader.StatusDownloading}
+	if err := remote.ControlDownload(context.Background(), true); err != nil {
+		t.Fatalf("continue remote task: %v", err)
+	}
+	if !controlled.continued {
+		t.Fatal("continue was not delegated to the existing downloader")
 	}
 }
 
@@ -170,6 +249,23 @@ func TestTorrentTaskOptionsAreInternalAndPreserveConnections(t *testing.T) {
 	}
 	if strings.Contains(string(encoded), "AutoTorrent") || strings.Contains(string(encoded), "auto_torrent") {
 		t.Fatalf("internal auto-torrent flag leaked into task state: %s", encoded)
+	}
+}
+
+func TestWithNetworkPolicyKeepsNodePolicyOutOfSerializedTaskOptions(t *testing.T) {
+	options := WithNetworkPolicy(&downloader.TaskOptions{Connections: 8}, request.SSRFOptions{
+		AllowedHosts: []string{"files.internal.example"},
+		AllowedCIDRs: []string{"192.168.10.0/24"},
+	})
+	if options == nil || options.NetworkPolicy == nil || options.NetworkPolicy.AllowedHosts[0] != "files.internal.example" {
+		t.Fatalf("unexpected transient policy: %#v", options)
+	}
+	data, err := json.Marshal(options)
+	if err != nil {
+		t.Fatalf("marshal options: %v", err)
+	}
+	if strings.Contains(string(data), "NetworkPolicy") || strings.Contains(string(data), "allowedHosts") || strings.Contains(string(data), "192.168.10.0") {
+		t.Fatalf("private policy leaked into task JSON: %s", data)
 	}
 }
 
