@@ -56,6 +56,9 @@ jobs:
       # Test-only sidecar credential. It is intentionally not a repository
       # secret and is never part of a published image.
       GOPEED_API_TOKEN: cloudrevo-ci-gopeed-token
+      # Compose resolves every service before selecting the test profile.
+      # This placeholder only satisfies PostgreSQL's required interpolation.
+      POSTGRES_PASSWORD: cloudrevo-ci-postgres-password
     steps:
       - uses: actions/checkout@v4
         with:
