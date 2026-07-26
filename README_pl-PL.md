@@ -16,7 +16,6 @@
 - [ ] Wskaźniki współpracy w czasie rzeczywistym
 - [ ] Synchronizacja pulpitu
 - [ ] Dokumentacja wdrożenia i API
-- [ ] Więcej testów integracyjnych
 
 ## Uruchomienie lokalne
 

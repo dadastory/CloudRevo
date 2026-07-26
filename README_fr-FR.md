@@ -16,7 +16,6 @@
 - [ ] Indicateurs de collaboration en temps réel
 - [ ] Synchronisation de bureau
 - [ ] Documentation de déploiement et d'API
-- [ ] Davantage de tests d'intégration
 
 ## Démarrer en local
 

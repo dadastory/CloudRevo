@@ -10,12 +10,18 @@ RUN go mod download
 
 COPY third_party/gopeed/ ./
 
-ARG VERSION=v1.9.3
+ARG GOPEED_VERSION=v1.9.3
 RUN mkdir -p cmd/web/dist \
     && printf '%s\n' '<!doctype html><title>Gopeed API</title>' > cmd/web/dist/index.html \
     && CGO_ENABLED=0 go build -tags nosqlite,web \
-    -ldflags="-s -w -X github.com/GopeedLab/gopeed/pkg/base.Version=${VERSION} -X github.com/GopeedLab/gopeed/pkg/base.InDocker=true" \
+    -ldflags="-s -w -X github.com/GopeedLab/gopeed/pkg/base.Version=${GOPEED_VERSION} -X github.com/GopeedLab/gopeed/pkg/base.InDocker=true" \
     -o /out/gopeed github.com/GopeedLab/gopeed/cmd/web
+
+FROM gopeed-build AS gopeed-fork-test
+
+RUN go test ./internal/protocol/http \
+    && go test ./internal/protocol/bt -run 'Test(TorrentDataDir|BitTorrentClientConfigUsesExplicitWritableDefaultStorage|BitTorrentOutboundPolicy)' \
+    && go test ./pkg/download -run TestSafeTaskErrorKeepsOnlyActionableHTTPStatus
 
 FROM alpine@sha256:5b10f432ef3da1b8d4c7eb6c487f2f5a8f096bc91145e68878dd4a5019afde11
 

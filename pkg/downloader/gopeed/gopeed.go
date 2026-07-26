@@ -35,6 +35,13 @@ const composeTokenEnv = "CR_GOPEED_API_TOKEN"
 
 var sourceHTTPStatusPattern = regexp.MustCompile(`(?i)http request fail, code:([1-5][0-9]{2})`)
 
+var (
+	gopeedErrorURLPattern     = regexp.MustCompile(`https?://[^\s"'<>]+`)
+	gopeedSensitiveHeader     = regexp.MustCompile(`(?i)\b(?:authorization|cookie|x-api-token)\s*[:=]\s*(?:"[^"]*"|[^\r\n]+)`)
+	gopeedSensitiveAssignment = regexp.MustCompile(`(?i)\b(?:token|api[_-]?key|signature|x-amz-[a-z0-9-]+)\s*[:=]\s*[^\s,;]+`)
+	gopeedSensitiveBody       = regexp.MustCompile(`(?is)\b(?:request\s+)?body\s*[:=]\s*(?:"(?:\\.|[^"])*"|[^\r\n]+)`)
+)
+
 type apiResult struct {
 	Code int             `json:"code"`
 	Msg  string          `json:"msg"`
@@ -60,6 +67,7 @@ type task struct {
 	Protocol   string `json:"protocol"`
 	FollowedBy string `json:"followedBy"`
 	Status     string `json:"status"`
+	Error      string `json:"error"`
 	Uploading  bool   `json:"uploading"`
 	Size       int64  `json:"size"`
 	Progress   struct {
@@ -138,7 +146,7 @@ func (c *client) CreateTaskWithOptions(ctx context.Context, source string, group
 	if len(selectedFiles) > 0 {
 		opts["selectFiles"] = selectedFiles
 	}
-	if extra := gopeedTaskOptions(source, taskOptions); len(extra) > 0 {
+	if extra := gopeedTaskOptions(source, taskOptions, groupOptions, c.options); len(extra) > 0 {
 		opts["extra"] = extra
 	}
 
@@ -184,7 +192,7 @@ func (c *client) PreviewTask(ctx context.Context, source string, groupOptions ma
 		request["extra"] = map[string]any{"method": requestOptions.Method, "header": requestOptions.Headers, "body": requestOptions.Body}
 	}
 	opts := map[string]any{"path": path.Join(c.downloadRoot, "preview-"+guid.String())}
-	if extra := gopeedTaskOptions(source, taskOptions); len(extra) > 0 {
+	if extra := gopeedTaskOptions(source, taskOptions, groupOptions, c.options); len(extra) > 0 {
 		opts["extra"] = extra
 	}
 	var resolved struct {
@@ -295,6 +303,19 @@ func (c *client) Info(ctx context.Context, handle *downloader.TaskHandle) (*down
 		files[index].Progress = progress
 		files[index].ProgressKnown = true
 	}
+	// Gopeed drops its live fetcher after a native BitTorrent task completes,
+	// so the REST snapshot may no longer carry per-file counters. A terminal
+	// selected file with a known size is nevertheless fully materialized;
+	// report that deterministic fact instead of leaving the workbench at an
+	// indeterminate progress state.
+	if state == downloader.StatusCompleted {
+		for index := range files {
+			if files[index].Selected && files[index].Size > 0 && !files[index].ProgressKnown {
+				files[index].Progress = 1
+				files[index].ProgressKnown = true
+			}
+		}
+	}
 
 	name := displayName(item.Name, item.Meta.Res.Name, item.Meta.Res.Files)
 	return &downloader.TaskStatus{
@@ -308,7 +329,7 @@ func (c *client) Info(ctx context.Context, handle *downloader.TaskHandle) (*down
 		Hash:          item.Meta.Res.Hash,
 		SavePath:      path.Join(c.tempRoot, handle.Hash),
 		Files:         files,
-		ErrorMessage:  errorMessage(item.Status),
+		ErrorMessage:  errorMessage(item.Status, item.Error),
 	}, nil
 }
 
@@ -329,6 +350,26 @@ func (c *client) Cancel(ctx context.Context, handle *downloader.TaskHandle) erro
 		if err := os.RemoveAll(path.Join(c.tempRoot, handle.Hash)); err != nil {
 			return fmt.Errorf("remove Gopeed temporary task directory: %w", err)
 		}
+	}
+	return nil
+}
+
+func (c *client) Pause(ctx context.Context, handle *downloader.TaskHandle) error {
+	if handle == nil || handle.ID == "" {
+		return fmt.Errorf("invalid Gopeed task handle")
+	}
+	if err := c.call(ctx, http.MethodPut, "/api/v1/tasks/"+url.PathEscape(handle.ID)+"/pause", nil, nil); err != nil {
+		return fmt.Errorf("pause Gopeed task: %w", err)
+	}
+	return nil
+}
+
+func (c *client) Continue(ctx context.Context, handle *downloader.TaskHandle) error {
+	if handle == nil || handle.ID == "" {
+		return fmt.Errorf("invalid Gopeed task handle")
+	}
+	if err := c.call(ctx, http.MethodPut, "/api/v1/tasks/"+url.PathEscape(handle.ID)+"/continue", nil, nil); err != nil {
+		return fmt.Errorf("continue Gopeed task: %w", err)
 	}
 	return nil
 }
@@ -451,7 +492,7 @@ func (c *client) call(ctx context.Context, method, endpoint string, payload any,
 	}
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return err
+		return fmt.Errorf("Gopeed API request: %s", c.sanitizeError(err.Error()))
 	}
 	defer resp.Body.Close()
 	data, err := io.ReadAll(resp.Body)
@@ -459,7 +500,7 @@ func (c *client) call(ctx context.Context, method, endpoint string, payload any,
 		return err
 	}
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		return fmt.Errorf("unexpected HTTP status %d: %s", resp.StatusCode, strings.TrimSpace(string(data)))
+		return fmt.Errorf("unexpected HTTP status %d: %s", resp.StatusCode, c.sanitizeError(strings.TrimSpace(string(data))))
 	}
 	var result apiResult
 	if err := json.Unmarshal(data, &result); err != nil {
@@ -472,7 +513,7 @@ func (c *client) call(ctx context.Context, method, endpoint string, payload any,
 				return &downloader.SourceHTTPError{StatusCode: statusCode}
 			}
 		}
-		return &apiError{Code: result.Code, Message: result.Msg}
+		return &apiError{Code: result.Code, Message: c.sanitizeError(result.Msg)}
 	}
 	if output != nil && len(result.Data) > 0 && string(result.Data) != "null" {
 		return json.Unmarshal(result.Data, output)
@@ -480,18 +521,96 @@ func (c *client) call(ctx context.Context, method, endpoint string, payload any,
 	return nil
 }
 
-func gopeedTaskOptions(source string, taskOptions *downloader.TaskOptions) map[string]any {
-	merged := make(map[string]any)
-	if taskOptions != nil && taskOptions.Connections != 0 {
-		merged["connections"] = taskOptions.Connections
+// sanitizeError defines the boundary between a private Gopeed sidecar and
+// queue persistence. Gopeed may echo upstream URLs or request context in an
+// error; retain a useful host/path diagnostic while removing credentials,
+// signed query data, API tokens, cookies, and local storage paths.
+func (c *client) sanitizeError(message string) string {
+	message = sanitizeGopeedError(message)
+	for _, secret := range []string{c.token, c.server, c.downloadRoot, c.tempRoot} {
+		if secret != "" {
+			message = strings.ReplaceAll(message, secret, "[redacted]")
+		}
 	}
-	if isDirectTorrentURL(source) || (taskOptions != nil && taskOptions.AutoTorrent) {
+	return message
+}
+
+// sanitizeGopeedError is safe to use for task telemetry received from the
+// sidecar. It deliberately has no access to client configuration, so callers
+// cannot accidentally persist the sidecar token or local mount paths.
+func sanitizeGopeedError(message string) string {
+	message = gopeedErrorURLPattern.ReplaceAllStringFunc(message, func(raw string) string {
+		trimmed := strings.TrimRight(raw, ".,;:)")
+		u, err := url.Parse(trimmed)
+		if err != nil {
+			return "[redacted URL]"
+		}
+		u.User = nil
+		if u.RawQuery != "" {
+			u.RawQuery = "redacted"
+		}
+		return strings.Replace(raw, trimmed, u.String(), 1)
+	})
+	message = gopeedSensitiveHeader.ReplaceAllString(message, "[redacted]")
+	message = gopeedSensitiveAssignment.ReplaceAllString(message, "[redacted]")
+	message = gopeedSensitiveBody.ReplaceAllString(message, "[redacted]")
+	return message
+}
+
+func gopeedTaskOptions(source string, taskOptions *downloader.TaskOptions, groupOptions map[string]interface{}, nodeOptions map[string]any) map[string]any {
+	merged := make(map[string]any)
+	if isHTTPSource(source) {
+		if connections := effectiveConnections(taskOptions, groupOptions, nodeOptions); connections != 0 {
+			merged["connections"] = connections
+		}
+	}
+	if taskOptions != nil && taskOptions.NetworkPolicy != nil {
+		policy := taskOptions.NetworkPolicy
+		merged["networkPolicy"] = map[string]any{
+			"allowedHosts": append([]string(nil), policy.AllowedHosts...),
+			"allowedCIDRs": append([]string(nil), policy.AllowedCIDRs...),
+		}
+	}
+	// Gopeed only follows the native BitTorrent path after an HTTP response has
+	// materialized a .torrent descriptor. Enable that internal handoff for all
+	// HTTP(S) sources so endpoints using query parameters or Content-Disposition
+	// are not mistaken for ordinary file downloads.
+	if isHTTPSource(source) || (taskOptions != nil && taskOptions.AutoTorrent) {
 		merged["autoTorrent"] = true
 		// The parent task retains its child relation until CloudRevo has
 		// durably followed it, so cleanup can remove both task records.
 		merged["deleteTorrentAfterDownload"] = false
 	}
 	return merged
+}
+
+func effectiveConnections(taskOptions *downloader.TaskOptions, groupOptions map[string]interface{}, nodeOptions map[string]any) int {
+	if taskOptions != nil && taskOptions.Connections >= 1 && taskOptions.Connections <= 256 {
+		return taskOptions.Connections
+	}
+	if value := configuredConnections(groupOptions); value != 0 {
+		return value
+	}
+	return configuredConnections(nodeOptions)
+}
+
+func configuredConnections(options map[string]any) int {
+	if options == nil { return 0 }
+	value, ok := options["connections"]
+	if !ok { return 0 }
+	var connections int
+	switch typed := value.(type) {
+	case int: connections = typed
+	case int64: connections = int(typed)
+	case float64:
+		if typed != float64(int(typed)) { return 0 }
+		connections = int(typed)
+	case json.Number:
+		parsed, err := typed.Int64(); if err != nil { return 0 }; connections = int(parsed)
+	default: return 0
+	}
+	if connections < 1 || connections > 256 { return 0 }
+	return connections
 }
 
 func isHTTPSource(source string) bool {
@@ -532,8 +651,12 @@ func mapStatus(status string, uploading bool) downloader.Status {
 		return downloader.StatusSeeding
 	}
 	switch status {
-	case "ready", "running", "pause", "wait":
+	case "ready", "running":
 		return downloader.StatusDownloading
+	case "wait":
+		return downloader.StatusWaiting
+	case "pause":
+		return downloader.StatusPaused
 	case "done":
 		return downloader.StatusCompleted
 	case "error":
@@ -543,8 +666,11 @@ func mapStatus(status string, uploading bool) downloader.Status {
 	}
 }
 
-func errorMessage(status string) string {
+func errorMessage(status, message string) string {
 	if status == "error" {
+		if message != "" {
+			return sanitizeGopeedError(message)
+		}
 		return "Gopeed task failed"
 	}
 	return ""

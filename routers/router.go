@@ -597,6 +597,16 @@ func initMasterRouter(dep dependency.Dep) *gin.Engine {
 					middleware.HashID(hashid.TaskID),
 					controllers.CancelDownloadTask,
 				)
+				remoteDownload.PUT(":id/pause",
+					middleware.RequiredScopes(types.ScopeWorkflowWrite),
+					middleware.HashID(hashid.TaskID),
+					controllers.PauseDownloadTask,
+				)
+				remoteDownload.PUT(":id/continue",
+					middleware.RequiredScopes(types.ScopeWorkflowWrite),
+					middleware.HashID(hashid.TaskID),
+					controllers.ContinueDownloadTask,
+				)
 				remoteDownload.POST(":id/retry",
 					middleware.RequiredScopes(types.ScopeWorkflowWrite),
 					middleware.HashID(hashid.TaskID),

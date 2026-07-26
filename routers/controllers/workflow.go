@@ -74,6 +74,24 @@ func CancelDownloadTask(c *gin.Context) {
 	c.JSON(200, serializer.Response{})
 }
 
+func PauseDownloadTask(c *gin.Context) {
+	controlDownloadTask(c, false)
+}
+
+func ContinueDownloadTask(c *gin.Context) {
+	controlDownloadTask(c, true)
+}
+
+func controlDownloadTask(c *gin.Context, resume bool) {
+	taskID := hashid.FromContext(c)
+	if err := explorer.ControlDownloadTask(c, taskID, resume); err != nil {
+		c.JSON(200, serializer.Err(c, err))
+		c.Abort()
+		return
+	}
+	c.JSON(200, serializer.Response{})
+}
+
 func RetryDownloadTask(c *gin.Context) {
 	taskID := hashid.FromContext(c)
 	resp, err := explorer.RetryDownloadTask(c, taskID)

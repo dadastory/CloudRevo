@@ -242,7 +242,8 @@ func (service *DownloadWorkflowService) PreviewDownload(c *gin.Context) (*downlo
 	if err != nil {
 		return nil, serializer.NewError(serializer.CodeCreateTaskError, "Failed to allocate downloader", err)
 	}
-	if err := request.ValidateExternalURL(c, service.Src[0], workflows.BuildSSRFOptions(c, dep, node.Settings(c))); err != nil {
+	ssrfOptions := workflows.BuildSSRFOptions(c, dep, node.Settings(c))
+	if err := request.ValidateExternalURL(c, service.Src[0], ssrfOptions); err != nil {
 		return nil, serializer.NewError(serializer.CodeParamErr, "Invalid source URL", err)
 	}
 	d, err := node.CreateDownloader(c, dep.RequestClient(), dep.SettingProvider())
@@ -255,7 +256,7 @@ func (service *DownloadWorkflowService) PreviewDownload(c *gin.Context) (*downlo
 	}
 	previewCtx, cancel := remoteDownloadPreviewContext(c, service.Src[0])
 	defer cancel()
-	status, err := preview.PreviewTask(previewCtx, service.Src[0], user.Edges.Group.Settings.RemoteDownloadOptions, service.RequestOptions, service.TaskOptions)
+	status, err := preview.PreviewTask(previewCtx, service.Src[0], user.Edges.Group.Settings.RemoteDownloadOptions, service.RequestOptions, workflows.WithNetworkPolicy(service.TaskOptions, ssrfOptions))
 	if err != nil {
 		if errors.Is(previewCtx.Err(), context.DeadlineExceeded) {
 			return nil, serializer.NewError(serializer.CodeCreateTaskError, "Magnet metadata resolution timed out. Please retry.", nil)
@@ -555,6 +556,21 @@ func CancelDownloadTask(c *gin.Context, taskID int) error {
 	return nil
 }
 
+func ControlDownloadTask(c *gin.Context, taskID int, resume bool) error {
+	downloadTask, err := getOwnedActiveDownloadTask(c, taskID)
+	if err != nil {
+		return err
+	}
+	if err := downloadTask.ControlDownload(c, resume); err != nil {
+		return serializer.NewError(serializer.CodeInternalSetting, "Failed to control download task", err)
+	}
+	dep := dependency.FromContext(c)
+	if err := dep.RemoteDownloadQueue(c).UpdateTask(c, downloadTask); err != nil {
+		return serializer.NewError(serializer.CodeDBError, "Failed to update download task", err)
+	}
+	return nil
+}
+
 type (
 	BatchDownloadTaskService struct {
 		IDs []string `json:"ids" binding:"required,max=100"`
@@ -685,6 +701,35 @@ func getOwnedTerminalDownloadTask(c *gin.Context, taskID int) (*workflows.Remote
 	}
 	if !isTerminalDownloadStatus(t.Status()) {
 		return nil, serializer.NewError(serializer.CodeParamErr, "Task is not terminal", nil)
+	}
+	downloadTask, ok := t.(*workflows.RemoteDownloadTask)
+	if !ok {
+		return nil, serializer.NewError(serializer.CodeDBError, "Invalid download task", nil)
+	}
+	return downloadTask, nil
+}
+
+func getOwnedActiveDownloadTask(c *gin.Context, taskID int) (*workflows.RemoteDownloadTask, error) {
+	dep := dependency.FromContext(c)
+	user := inventory.UserFromContext(c)
+	registry := dep.TaskRegistry()
+	t, found := registry.Get(taskID)
+	if !found {
+		loadCtx := context.WithValue(c, inventory.LoadTaskUser{}, true)
+		model, err := dep.TaskClient().GetTaskByID(loadCtx, taskID)
+		if err != nil {
+			return nil, serializer.NewError(serializer.CodeNotFound, "Task not found", nil)
+		}
+		t, err = queue.NewTaskFromModel(model)
+		if err != nil {
+			return nil, serializer.NewError(serializer.CodeDBError, "Failed to parse task", err)
+		}
+	}
+	if t.Type() != queue.RemoteDownloadTaskType || t.Owner() == nil || t.Owner().ID != user.ID {
+		return nil, serializer.NewError(serializer.CodeNotFound, "Task not found", nil)
+	}
+	if isTerminalDownloadStatus(t.Status()) || t.Status() == task.StatusQueued {
+		return nil, serializer.NewError(serializer.CodeParamErr, "Task is not active", nil)
 	}
 	downloadTask, ok := t.(*workflows.RemoteDownloadTask)
 	if !ok {
