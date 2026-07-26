@@ -87,25 +87,25 @@ jobs:
         include:
           - image: cloudrevo
             dockerfile: Dockerfile
-            build_args: VERSION=${{ env.RELEASE_VERSION }}
+            build_arg: VERSION
             platform: linux/amd64
             arch: amd64
             runner: ubuntu-24.04
           - image: cloudrevo
             dockerfile: Dockerfile
-            build_args: VERSION=${{ env.RELEASE_VERSION }}
+            build_arg: VERSION
             platform: linux/arm64
             arch: arm64
             runner: ubuntu-24.04-arm
           - image: cloudrevo-gopeed
             dockerfile: .build/gopeed.Dockerfile
-            build_args: GOPEED_VERSION=v1.9.3
+            build_arg: GOPEED_VERSION
             platform: linux/amd64
             arch: amd64
             runner: ubuntu-24.04
           - image: cloudrevo-gopeed
             dockerfile: .build/gopeed.Dockerfile
-            build_args: GOPEED_VERSION=v1.9.3
+            build_arg: GOPEED_VERSION
             platform: linux/arm64
             arch: arm64
             runner: ubuntu-24.04-arm
@@ -128,7 +128,7 @@ jobs:
           file: ${{ matrix.dockerfile }}
           platforms: ${{ matrix.platform }}
           build-args: |
-            ${{ matrix.build_args }}
+            ${{ matrix.build_arg }}=${{ matrix.build_arg == 'VERSION' && env.RELEASE_VERSION || 'v1.9.3' }}
           outputs: type=image,push-by-digest=true,name-canonical=true,push=true,name=${{ env.REGISTRY }}/${{ matrix.image }}
           cache-from: type=gha,scope=${{ matrix.image }}-${{ matrix.arch }}
           cache-to: type=gha,mode=max,scope=${{ matrix.image }}-${{ matrix.arch }}
